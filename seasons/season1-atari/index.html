@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE SPARROWS - Episode 1: The Awakening</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0a0a0a;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Press Start 2P', monospace;
+            overflow: hidden;
+        }
+        
+        .cabinet {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 50%, #1a1a1a 100%);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 
+                0 0 60px rgba(0,0,0,0.8),
+                inset 0 2px 0 rgba(255,255,255,0.1),
+                inset 0 -2px 0 rgba(0,0,0,0.5);
+            position: relative;
+        }
+        
+        .cabinet::before {
+            content: 'ВОРОБЬИ';
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff6b35;
+            font-size: 10px;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px #ff6b35;
+        }
+        
+        .screen-bezel {
+            background: #111;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 
+                inset 0 0 30px rgba(0,0,0,0.9),
+                0 0 2px rgba(255,255,255,0.1);
+        }
+        
+        .crt-container {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            background: #000;
+        }
+        
+        /* CRT Effects Overlay */
+        .crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            border-radius: 10px;
+        }
+        
+        .scanlines {
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+        }
+        
+        .crt-curve {
+            box-shadow: 
+                inset 0 0 100px rgba(0,0,0,0.5),
+                inset 0 0 50px rgba(0,0,0,0.3);
+            background: radial-gradient(
+                ellipse at center,
+                transparent 0%,
+                transparent 70%,
+                rgba(0,0,0,0.3) 100%
+            );
+        }
+        
+        .phosphor-glow {
+            background: radial-gradient(
+                ellipse at center,
+                rgba(100, 255, 100, 0.03) 0%,
+                transparent 70%
+            );
+            mix-blend-mode: screen;
+        }
+        
+        .flicker {
+            animation: flicker 0.15s infinite;
+            opacity: 0.97;
+        }
+        
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 0.99; }
+            100% { opacity: 0.97; }
+        }
+        
+        .info-panel {
+            margin-top: 20px;
+            color: #888;
+            font-size: 8px;
+            text-align: center;
+            line-height: 2;
+        }
+        
+        .info-panel .controls {
+            color: #ff6b35;
+        }
+        
+        .title-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            z-index: 10;
+        }
+        
+        .title-screen h1 {
+            color: #ff6b35;
+            font-size: 16px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px #ff6b35;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .title-screen h2 {
+            color: #ffd700;
+            font-size: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .title-screen .press-start {
+            color: #fff;
+            font-size: 8px;
+            animation: blink 1s step-end infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { text-shadow: 0 0 20px #ff6b35; }
+            50% { text-shadow: 0 0 40px #ff6b35, 0 0 60px #ff4500; }
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        .character-select {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 9;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+        }
+        
+        .character-select h3 {
+            color: #ffd700;
+            font-size: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .char-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 10px;
+        }
+        
+        .char-option {
+            text-align: center;
+            padding: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+        
+        .char-option:hover, .char-option.selected {
+            border-color: #fff;
+        }
+        
+        .char-option .sprite {
+            width: 32px;
+            height: 32px;
+            margin: 0 auto 5px;
+            image-rendering: pixelated;
+        }
+        
+        .char-option .name {
+            font-size: 6px;
+            color: #fff;
+        }
+        
+        .char-option .skill {
+            font-size: 5px;
+            color: #888;
+            margin-top: 2px;
+        }
+        
+        .hud {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            right: 5px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #fff;
+            z-index: 5;
+            pointer-events: none;
+        }
+        
+        .hidden { display: none !important; }
+        .visible { display: flex !important; }
+    </style>
+</head>
+<body>
+    <div class="cabinet">
+        <div class="screen-bezel">
+            <div class="crt-container">
+                <canvas id="gameCanvas" width="640" height="480"></canvas>
+                <div class="crt-overlay scanlines"></div>
+                <div class="crt-overlay crt-curve"></div>
+                <div class="crt-overlay phosphor-glow"></div>
+                <div class="crt-overlay flicker"></div>
+                
+                <div class="title-screen" id="titleScreen">
+                    <h1>THE SPARROWS</h1>
+                    <h2>EPISODE 1: THE AWAKENING</h2>
+                    <p class="press-start">PRESS SPACE TO START</p>
+                </div>
+                
+                <div class="character-select" id="charSelect">
+                    <h3>SELECT YOUR SPARROW</h3>
+                    <div class="char-grid" id="charGrid"></div>
+                    <p style="color:#888;font-size:6px;margin-top:15px;">ARROWS TO SELECT • SPACE TO CONFIRM</p>
+                </div>
+            </div>
+        </div>
+        <div class="info-panel">
+            <span class="controls">ARROWS</span> MOVE &nbsp;|&nbsp; <span class="controls">SPACE</span> ACTION<br>
+            REACH THE RECRUITMENT POINT
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // THE SPARROWS - EPISODE 1: THE AWAKENING
+        // Atari 2600 Style Game Engine
+        // ============================================
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Atari 2600 authentic resolution (scaled 4x)
+        const NATIVE_WIDTH = 160;
+        const NATIVE_HEIGHT = 120;
+        const SCALE = 4;
+        
+        canvas.width = NATIVE_WIDTH * SCALE;
+        canvas.height = NATIVE_HEIGHT * SCALE;
+        
+        // Game States
+        const STATES = {
+            TITLE: 'title',
+            SELECT: 'select',
+            BRIEFING: 'briefing',
+            PLAYING: 'playing',
+            TRANSITION: 'transition',
+            VICTORY: 'victory'
+        };
+        
+        let gameState = STATES.TITLE;
+        let selectedChar = 0;
+        let currentScreen = 0;
+        let screensCompleted = [false, false, false, false];
+        
+        // Atari Color Palette (authentic NTSC colors)
+        const COLORS = {
+            black: '#000000',
+            white: '#ECECEC',
+            red: '#D82800',
+            orange: '#FC9838',
+            yellow: '#FAE084',
+            green: '#00A800',
+            cyan: '#00E8D8',
+            blue: '#0070EC',
+            purple: '#D800CC',
+            pink: '#F878F8',
+            brown: '#8C4400',
+            gray: '#7C7C7C',
+            darkGray: '#3C3C3C',
+            olive: '#887000',
+            teal: '#00A844',
+            gold: '#FCD800'
+        };
+        
+        // Character Definitions
+        const CHARACTERS = [
+            {
+                name: 'NATASHA',
+                skill: 'HACKER',
+                color: COLORS.cyan,
+                secondaryColor: COLORS.blue,
+                speed: 2,
+                description: 'DECRYPT SECURITY NODES'
+            },
+            {
+                name: 'MARIA',
+                skill: 'COMBAT',
+                color: COLORS.green,
+                secondaryColor: COLORS.teal,
+                speed: 3,
+                description: 'NEUTRALIZE HOSTILES'
+            },
+            {
+                name: 'ANYA',
+                skill: 'SNIPER',
+                color: COLORS.orange,
+                secondaryColor: COLORS.red,
+                speed: 2,
+                description: 'PRECISION TARGETING'
+            },
+            {
+                name: 'OLGA',
+                skill: 'STRATEGY',
+                color: COLORS.purple,
+                secondaryColor: COLORS.pink,
+                speed: 2,
+                description: 'TACTICAL COMMAND'
+            }
+        ];
+        
+        // Player State
+        let player = {
+            x: 20,
+            y: 60,
+            width: 8,
+            height: 12,
+            char: null,
+            facingRight: true,
+            frame: 0,
+            animTimer: 0
+        };
+        
+        // Level Data for Each Screen (one per character)
+        const LEVELS = [
+            // Screen 1: Natasha - Decrypt terminals
+            {
+                char: 0,
+                playerStart: { x: 10, y: 90 },
+                goal: { x: 140, y: 90, width: 12, height: 16 },
+                walls: [
+                    { x: 0, y: 0, w: 160, h: 8 },
+                    { x: 0, y: 112, w: 160, h: 8 },
+                    { x: 0, y: 0, w: 8, h: 120 },
+                    { x: 152, y: 0, w: 8, h: 120 },
+                    { x: 40, y: 30, w: 8, h: 50 },
+                    { x: 80, y: 40, w: 8, h: 72 },
+                    { x: 110, y: 8, w: 8, h: 60 }
+                ],
+                items: [
+                    { x: 50, y: 60, collected: false, type: 'node' },
+                    { x: 95, y: 80, collected: false, type: 'node' },
+                    { x: 125, y: 50, collected: false, type: 'node' }
+                ],
+                enemies: [],
+                message: 'NATASHA: DECRYPT 3 NODES'
+            },
+            // Screen 2: Maria - Combat training
+            {
+                char: 1,
+                playerStart: { x: 80, y: 60 },
+                goal: { x: 140, y: 90, width: 12, height: 16 },
+                walls: [
+                    { x: 0, y: 0, w: 160, h: 8 },
+                    { x: 0, y: 112, w: 160, h: 8 },
+                    { x: 0, y: 0, w: 8, h: 120 },
+                    { x: 152, y: 0, w: 8, h: 120 }
+                ],
+                items: [],
+                enemies: [
+                    { x: 30, y: 50, active: true, dir: 1 },
+                    { x: 120, y: 70, active: true, dir: -1 },
+                    { x: 70, y: 90, active: true, dir: 1 }
+                ],
+                message: 'MARIA: NEUTRALIZE TARGETS'
+            },
+            // Screen 3: Anya - Precision shooting
+            {
+                char: 2,
+                playerStart: { x: 20, y: 100 },
+                goal: { x: 140, y: 90, width: 12, height: 16 },
+                walls: [
+                    { x: 0, y: 0, w: 160, h: 8 },
+                    { x: 0, y: 112, w: 160, h: 8 },
+                    { x: 0, y: 0, w: 8, h: 120 },
+                    { x: 152, y: 0, w: 8, h: 120 },
+                    { x: 50, y: 8, w: 8, h: 70 },
+                    { x: 100, y: 40, w: 8, h: 72 }
+                ],
+                items: [
+                    { x: 70, y: 30, collected: false, type: 'target' },
+                    { x: 130, y: 50, collected: false, type: 'target' },
+                    { x: 70, y: 90, collected: false, type: 'target' }
+                ],
+                enemies: [],
+                message: 'ANYA: HIT ALL TARGETS'
+            },
+            // Screen 4: Olga - Strategic path
+            {
+                char: 3,
+                playerStart: { x: 10, y: 100 },
+                goal: { x: 140, y: 15, width: 12, height: 16 },
+                walls: [
+                    { x: 0, y: 0, w: 160, h: 8 },
+                    { x: 0, y: 112, w: 160, h: 8 },
+                    { x: 0, y: 0, w: 8, h: 120 },
+                    { x: 152, y: 0, w: 8, h: 120 },
+                    { x: 30, y: 80, w: 80, h: 8 },
+                    { x: 50, y: 50, w: 80, h: 8 },
+                    { x: 30, y: 20, w: 80, h: 8 }
+                ],
+                items: [
+                    { x: 120, y: 95, collected: false, type: 'intel' },
+                    { x: 40, y: 65, collected: false, type: 'intel' },
+                    { x: 120, y: 35, collected: false, type: 'intel' }
+                ],
+                enemies: [
+                    { x: 70, y: 95, active: true, dir: 1, patrol: { min: 40, max: 100 } },
+                    { x: 90, y: 65, active: true, dir: -1, patrol: { min: 60, max: 130 } }
+                ],
+                message: 'OLGA: COLLECT INTEL • AVOID GUARDS'
+            }
+        ];
+        
+        let currentLevel = null;
+        let bullets = [];
+        let particles = [];
+        let score = 0;
+        let messageTimer = 0;
+        let currentMessage = '';
+        
+        // Audio Context for Atari-style sounds
+        let audioCtx = null;
+        
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        function playSound(freq, duration, type = 'square') {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+        
+        function playCollect() {
+            playSound(880, 0.1);
+            setTimeout(() => playSound(1100, 0.1), 50);
+        }
+        
+        function playShoot() {
+            playSound(200, 0.15, 'sawtooth');
+        }
+        
+        function playHit() {
+            playSound(100, 0.2, 'square');
+        }
+        
+        function playVictory() {
+            [440, 550, 660, 880].forEach((f, i) => {
+                setTimeout(() => playSound(f, 0.15), i * 100);
+            });
+        }
+        
+        // Input Handling
+        const keys = {};
+        let spacePressed = false;
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (!spacePressed) {
+                    spacePressed = true;
+                    handleAction();
+                }
+            }
+            
+            if (gameState === STATES.SELECT) {
+                if (e.code === 'ArrowLeft') selectedChar = (selectedChar + 3) % 4;
+                if (e.code === 'ArrowRight') selectedChar = (selectedChar + 1) % 4;
+                if (e.code === 'ArrowUp') selectedChar = (selectedChar + 2) % 4;
+                if (e.code === 'ArrowDown') selectedChar = (selectedChar + 2) % 4;
+                playSound(440, 0.05);
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            if (e.code === 'Space') spacePressed = false;
+        });
+        
+        function handleAction() {
+            if (!audioCtx) initAudio();
+            
+            switch (gameState) {
+                case STATES.TITLE:
+                    gameState = STATES.SELECT;
+                    document.getElementById('titleScreen').classList.add('hidden');
+                    document.getElementById('charSelect').classList.add('visible');
+                    renderCharacterSelect();
+                    playSound(660, 0.1);
+                    break;
+                    
+                case STATES.SELECT:
+                    startGame();
+                    break;
+                    
+                case STATES.PLAYING:
+                    playerAction();
+                    break;
+                    
+                case STATES.TRANSITION:
+                    nextScreen();
+                    break;
+                    
+                case STATES.VICTORY:
+                    resetGame();
+                    break;
+            }
+        }
+        
+        function renderCharacterSelect() {
+            const grid = document.getElementById('charGrid');
+            grid.innerHTML = '';
+            
+            CHARACTERS.forEach((char, i) => {
+                const div = document.createElement('div');
+                div.className = 'char-option' + (i === selectedChar ? ' selected' : '');
+                div.innerHTML = `
+                    <canvas class="sprite" width="32" height="32" id="charSprite${i}"></canvas>
+                    <div class="name" style="color:${char.color}">${char.name}</div>
+                    <div class="skill">${char.skill}</div>
+                `;
+                div.onclick = () => {
+                    selectedChar = i;
+                    renderCharacterSelect();
+                };
+                grid.appendChild(div);
+                
+                // Draw character sprite preview
+                const spriteCanvas = document.getElementById(`charSprite${i}`);
+                const spriteCtx = spriteCanvas.getContext('2d');
+                spriteCtx.imageSmoothingEnabled = false;
+                drawCharacterSprite(spriteCtx, char, 12, 8, 2);
+            });
+        }
+        
+        function drawCharacterSprite(context, char, x, y, scale = 1) {
+            const s = scale;
+            // Body
+            context.fillStyle = char.color;
+            context.fillRect(x + 2*s, y + 4*s, 4*s, 6*s);
+            // Head
+            context.fillRect(x + 1*s, y, 6*s, 4*s);
+            // Arms
+            context.fillStyle = char.secondaryColor;
+            context.fillRect(x, y + 4*s, 2*s, 4*s);
+            context.fillRect(x + 6*s, y + 4*s, 2*s, 4*s);
+            // Legs
+            context.fillRect(x + 2*s, y + 10*s, 2*s, 2*s);
+            context.fillRect(x + 4*s, y + 10*s, 2*s, 2*s);
+            // Eyes
+            context.fillStyle = COLORS.white;
+            context.fillRect(x + 2*s, y + 1*s, 1*s, 1*s);
+            context.fillRect(x + 5*s, y + 1*s, 1*s, 1*s);
+        }
+        
+        function startGame() {
+            document.getElementById('charSelect').classList.remove('visible');
+            document.getElementById('charSelect').classList.add('hidden');
+            
+            player.char = CHARACTERS[selectedChar];
+            currentScreen = 0;
+            screensCompleted = [false, false, false, false];
+            score = 0;
+            
+            loadLevel(currentScreen);
+            gameState = STATES.PLAYING;
+            playSound(880, 0.15);
+        }
+        
+        function loadLevel(index) {
+            currentLevel = JSON.parse(JSON.stringify(LEVELS[index]));
+            player.x = currentLevel.playerStart.x;
+            player.y = currentLevel.playerStart.y;
+            player.char = CHARACTERS[currentLevel.char];
+            bullets = [];
+            particles = [];
+            currentMessage = currentLevel.message;
+            messageTimer = 180;
+        }
+        
+        function playerAction() {
+            const char = CHARACTERS[currentLevel.char];
+            
+            // Natasha: Decrypt nearby nodes
+            if (currentLevel.char === 0) {
+                currentLevel.items.forEach(item => {
+                    if (!item.collected && distance(player, item) < 20) {
+                        item.collected = true;
+                        score += 100;
+                        playCollect();
+                        spawnParticles(item.x, item.y, COLORS.cyan);
+                    }
+                });
+            }
+            
+            // Maria: Melee attack
+            if (currentLevel.char === 1) {
+                currentLevel.enemies.forEach(enemy => {
+                    if (enemy.active && distance(player, enemy) < 20) {
+                        enemy.active = false;
+                        score += 150;
+                        playHit();
+                        spawnParticles(enemy.x, enemy.y, COLORS.red);
+                    }
+                });
+            }
+            
+            // Anya: Shoot
+            if (currentLevel.char === 2) {
+                bullets.push({
+                    x: player.x + 4,
+                    y: player.y + 4,
+                    dx: player.facingRight ? 6 : -6,
+                    dy: 0
+                });
+                playShoot();
+            }
+            
+            // Olga: Collect intel nearby
+            if (currentLevel.char === 3) {
+                currentLevel.items.forEach(item => {
+                    if (!item.collected && distance(player, item) < 20) {
+                        item.collected = true;
+                        score += 100;
+                        playCollect();
+                        spawnParticles(item.x, item.y, COLORS.purple);
+                    }
+                });
+            }
+        }
+        
+        function distance(a, b) {
+            return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+        }
+        
+        function spawnParticles(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x, y,
+                    dx: (Math.random() - 0.5) * 4,
+                    dy: (Math.random() - 0.5) * 4,
+                    life: 30,
+                    color
+                });
+            }
+        }
+        
+        function update() {
+            if (gameState !== STATES.PLAYING) return;
+            
+            // Player movement
+            let dx = 0, dy = 0;
+            const speed = player.char.speed;
+            
+            if (keys['ArrowLeft']) { dx = -speed; player.facingRight = false; }
+            if (keys['ArrowRight']) { dx = speed; player.facingRight = true; }
+            if (keys['ArrowUp']) dy = -speed;
+            if (keys['ArrowDown']) dy = speed;
+            
+            // Collision detection
+            const newX = player.x + dx;
+            const newY = player.y + dy;
+            
+            let canMoveX = true;
+            let canMoveY = true;
+            
+            currentLevel.walls.forEach(wall => {
+                if (rectCollide({ x: newX, y: player.y, width: player.width, height: player.height }, wall)) {
+                    canMoveX = false;
+                }
+                if (rectCollide({ x: player.x, y: newY, width: player.width, height: player.height }, wall)) {
+                    canMoveY = false;
+                }
+            });
+            
+            if (canMoveX) player.x = newX;
+            if (canMoveY) player.y = newY;
+            
+            // Animation
+            if (dx !== 0 || dy !== 0) {
+                player.animTimer++;
+                if (player.animTimer > 8) {
+                    player.animTimer = 0;
+                    player.frame = (player.frame + 1) % 2;
+                }
+            }
+            
+            // Update enemies
+            currentLevel.enemies.forEach(enemy => {
+                if (!enemy.active) return;
+                
+                enemy.x += enemy.dir * 1;
+                if (enemy.patrol) {
+                    if (enemy.x < enemy.patrol.min || enemy.x > enemy.patrol.max) {
+                        enemy.dir *= -1;
+                    }
+                } else {
+                    if (enemy.x < 20 || enemy.x > 140) enemy.dir *= -1;
+                }
+                
+                // Check collision with player (for Olga's level)
+                if (currentLevel.char === 3 && rectCollide(player, { x: enemy.x, y: enemy.y, w: 8, h: 12 })) {
+                    // Reset player position
+                    player.x = currentLevel.playerStart.x;
+                    player.y = currentLevel.playerStart.y;
+                    playHit();
+                    currentMessage = 'DETECTED! REPOSITIONING...';
+                    messageTimer = 90;
+                }
+            });
+            
+            // Update bullets
+            bullets.forEach((bullet, i) => {
+                bullet.x += bullet.dx;
+                bullet.y += bullet.dy;
+                
+                // Check wall collision
+                let hitWall = false;
+                currentLevel.walls.forEach(wall => {
+                    if (bullet.x > wall.x && bullet.x < wall.x + wall.w &&
+                        bullet.y > wall.y && bullet.y < wall.y + wall.h) {
+                        hitWall = true;
+                    }
+                });
+                
+                // Check target collision (Anya)
+                currentLevel.items.forEach(item => {
+                    if (!item.collected && distance(bullet, item) < 10) {
+                        item.collected = true;
+                        score += 200;
+                        playCollect();
+                        spawnParticles(item.x, item.y, COLORS.orange);
+                        hitWall = true;
+                    }
+                });
+                
+                if (hitWall || bullet.x < 0 || bullet.x > NATIVE_WIDTH) {
+                    bullets.splice(i, 1);
+                }
+            });
+            
+            // Update particles
+            particles.forEach((p, i) => {
+                p.x += p.dx;
+                p.y += p.dy;
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
+            
+            // Message timer
+            if (messageTimer > 0) messageTimer--;
+            
+            // Check level completion
+            checkLevelComplete();
+        }
+        
+        function rectCollide(a, b) {
+            return a.x < b.x + (b.w || b.width) &&
+                   a.x + (a.width || a.w) > b.x &&
+                   a.y < b.y + (b.h || b.height) &&
+                   a.y + (a.height || a.h) > b.y;
+        }
+        
+        function checkLevelComplete() {
+            let complete = false;
+            
+            // Check if all items collected
+            if (currentLevel.items.length > 0) {
+                complete = currentLevel.items.every(item => item.collected);
+            }
+            
+            // Check if all enemies defeated (Maria's level)
+            if (currentLevel.char === 1) {
+                complete = currentLevel.enemies.every(enemy => !enemy.active);
+            }
+            
+            // Must also reach goal
+            if (complete && rectCollide(player, currentLevel.goal)) {
+                screensCompleted[currentScreen] = true;
+                
+                if (screensCompleted.every(s => s)) {
+                    gameState = STATES.VICTORY;
+                    playVictory();
+                } else {
+                    gameState = STATES.TRANSITION;
+                    currentMessage = 'SCREEN COMPLETE!';
+                    messageTimer = 120;
+                    playVictory();
+                }
+            }
+        }
+        
+        function nextScreen() {
+            currentScreen = (currentScreen + 1) % 4;
+            while (screensCompleted[currentScreen]) {
+                currentScreen = (currentScreen + 1) % 4;
+            }
+            loadLevel(currentScreen);
+            gameState = STATES.PLAYING;
+        }
+        
+        function resetGame() {
+            gameState = STATES.TITLE;
+            document.getElementById('titleScreen').classList.remove('hidden');
+            score = 0;
+        }
+        
+        function render() {
+            // Clear with black
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.scale(SCALE, SCALE);
+            ctx.imageSmoothingEnabled = false;
+            
+            if (gameState === STATES.PLAYING || gameState === STATES.TRANSITION) {
+                renderGame();
+            } else if (gameState === STATES.VICTORY) {
+                renderVictory();
+            }
+            
+            ctx.restore();
+        }
+        
+        function renderGame() {
+            // Background gradient (subtle)
+            ctx.fillStyle = '#0a0a12';
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Render walls
+            ctx.fillStyle = COLORS.darkGray;
+            currentLevel.walls.forEach(wall => {
+                ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+                // Brick pattern
+                ctx.fillStyle = COLORS.gray;
+                for (let i = 0; i < wall.w; i += 8) {
+                    for (let j = 0; j < wall.h; j += 4) {
+                        ctx.fillRect(wall.x + i + ((j/4) % 2) * 4, wall.y + j, 1, 1);
+                    }
+                }
+                ctx.fillStyle = COLORS.darkGray;
+            });
+            
+            // Render goal
+            const goalColor = Date.now() % 500 < 250 ? COLORS.gold : COLORS.yellow;
+            ctx.fillStyle = goalColor;
+            ctx.fillRect(currentLevel.goal.x, currentLevel.goal.y, currentLevel.goal.width, currentLevel.goal.height);
+            // Arrow indicator
+            ctx.fillStyle = COLORS.white;
+            ctx.fillRect(currentLevel.goal.x + 4, currentLevel.goal.y - 6, 4, 4);
+            ctx.fillRect(currentLevel.goal.x + 5, currentLevel.goal.y - 8, 2, 2);
+            
+            // Render items
+            currentLevel.items.forEach(item => {
+                if (item.collected) return;
+                
+                const pulse = Math.sin(Date.now() / 150) * 0.5 + 0.5;
+                if (item.type === 'node') {
+                    ctx.fillStyle = pulse > 0.5 ? COLORS.cyan : COLORS.blue;
+                    ctx.fillRect(item.x - 3, item.y - 3, 6, 6);
+                    ctx.fillStyle = COLORS.white;
+                    ctx.fillRect(item.x - 1, item.y - 1, 2, 2);
+                } else if (item.type === 'target') {
+                    ctx.fillStyle = pulse > 0.5 ? COLORS.red : COLORS.orange;
+                    ctx.fillRect(item.x - 4, item.y - 4, 8, 8);
+                    ctx.fillStyle = COLORS.white;
+                    ctx.fillRect(item.x - 2, item.y - 2, 4, 4);
+                    ctx.fillStyle = COLORS.red;
+                    ctx.fillRect(item.x - 1, item.y - 1, 2, 2);
+                } else if (item.type === 'intel') {
+                    ctx.fillStyle = pulse > 0.5 ? COLORS.purple : COLORS.pink;
+                    ctx.fillRect(item.x - 2, item.y - 3, 4, 6);
+                    ctx.fillStyle = COLORS.white;
+                    ctx.fillRect(item.x - 1, item.y - 2, 2, 1);
+                    ctx.fillRect(item.x - 1, item.y, 2, 1);
+                    ctx.fillRect(item.x - 1, item.y + 2, 2, 1);
+                }
+            });
+            
+            // Render enemies
+            currentLevel.enemies.forEach(enemy => {
+                if (!enemy.active) return;
+                ctx.fillStyle = COLORS.red;
+                ctx.fillRect(enemy.x, enemy.y, 8, 10);
+                ctx.fillStyle = COLORS.orange;
+                ctx.fillRect(enemy.x + 1, enemy.y, 6, 4);
+                ctx.fillStyle = COLORS.white;
+                ctx.fillRect(enemy.x + 2, enemy.y + 1, 1, 1);
+                ctx.fillRect(enemy.x + 5, enemy.y + 1, 1, 1);
+            });
+            
+            // Render bullets
+            ctx.fillStyle = COLORS.yellow;
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x - 2, bullet.y - 1, 4, 2);
+            });
+            
+            // Render particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 30;
+                ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+            });
+            ctx.globalAlpha = 1;
+            
+            // Render player
+            const char = player.char;
+            const px = Math.floor(player.x);
+            const py = Math.floor(player.y) + (player.frame * 1);
+            
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(px, py + player.height, player.width, 2);
+            
+            // Body
+            ctx.fillStyle = char.color;
+            ctx.fillRect(px + 2, py + 4, 4, 6);
+            // Head
+            ctx.fillRect(px + 1, py, 6, 4);
+            // Arms
+            ctx.fillStyle = char.secondaryColor;
+            if (player.frame === 0) {
+                ctx.fillRect(px, py + 4, 2, 4);
+                ctx.fillRect(px + 6, py + 4, 2, 4);
+            } else {
+                ctx.fillRect(px, py + 3, 2, 4);
+                ctx.fillRect(px + 6, py + 5, 2, 4);
+            }
+            // Legs
+            if (player.frame === 0) {
+                ctx.fillRect(px + 2, py + 10, 2, 2);
+                ctx.fillRect(px + 4, py + 10, 2, 2);
+            } else {
+                ctx.fillRect(px + 1, py + 10, 2, 2);
+                ctx.fillRect(px + 5, py + 10, 2, 2);
+            }
+            // Eyes
+            ctx.fillStyle = COLORS.white;
+            if (player.facingRight) {
+                ctx.fillRect(px + 4, py + 1, 2, 1);
+            } else {
+                ctx.fillRect(px + 2, py + 1, 2, 1);
+            }
+            
+            // HUD
+            ctx.fillStyle = COLORS.white;
+            ctx.font = '4px monospace';
+            
+            // Score
+            ctx.fillText('SCORE:' + score.toString().padStart(5, '0'), 4, 5);
+            
+            // Character indicator
+            ctx.fillStyle = char.color;
+            ctx.fillText(char.name, NATIVE_WIDTH - 40, 5);
+            
+            // Progress dots
+            for (let i = 0; i < 4; i++) {
+                ctx.fillStyle = screensCompleted[i] ? COLORS.green : (i === currentScreen ? COLORS.yellow : COLORS.darkGray);
+                ctx.fillRect(70 + i * 6, 2, 4, 4);
+            }
+            
+            // Items remaining
+            const remaining = currentLevel.items.filter(i => !i.collected).length;
+            const enemiesLeft = currentLevel.enemies.filter(e => e.active).length;
+            
+            if (currentLevel.items.length > 0) {
+                ctx.fillStyle = COLORS.yellow;
+                ctx.fillText('ITEMS:' + remaining, 4, NATIVE_HEIGHT - 3);
+            }
+            if (currentLevel.enemies.length > 0 && currentLevel.char === 1) {
+                ctx.fillStyle = COLORS.red;
+                ctx.fillText('ENEMIES:' + enemiesLeft, 4, NATIVE_HEIGHT - 3);
+            }
+            
+            // Message
+            if (messageTimer > 0) {
+                ctx.fillStyle = COLORS.black;
+                ctx.fillRect(0, NATIVE_HEIGHT / 2 - 6, NATIVE_WIDTH, 12);
+                ctx.fillStyle = Date.now() % 200 < 100 ? COLORS.white : COLORS.yellow;
+                ctx.fillText(currentMessage, NATIVE_WIDTH / 2 - currentMessage.length * 2, NATIVE_HEIGHT / 2 + 2);
+            }
+        }
+        
+        function renderVictory() {
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            const flash = Date.now() % 500 < 250;
+            
+            ctx.fillStyle = flash ? COLORS.gold : COLORS.yellow;
+            ctx.font = '6px monospace';
+            ctx.fillText('MISSION COMPLETE', 30, 40);
+            
+            ctx.fillStyle = COLORS.white;
+            ctx.font = '4px monospace';
+            ctx.fillText('THE SPARROWS ARE ASSEMBLED', 20, 55);
+            
+            ctx.fillStyle = COLORS.cyan;
+            ctx.fillText('FINAL SCORE: ' + score, 45, 75);
+            
+            ctx.fillStyle = flash ? COLORS.white : COLORS.gray;
+            ctx.fillText('PRESS SPACE TO CONTINUE', 25, 100);
+            
+            // Draw all four Sparrows
+            CHARACTERS.forEach((char, i) => {
+                const x = 30 + i * 28;
+                const y = 85;
+                ctx.fillStyle = char.color;
+                ctx.fillRect(x + 2, y + 4, 4, 6);
+                ctx.fillRect(x + 1, y, 6, 4);
+                ctx.fillStyle = char.secondaryColor;
+                ctx.fillRect(x, y + 4, 2, 4);
+                ctx.fillRect(x + 6, y + 4, 2, 4);
+            });
+        }
+        
+        // Game Loop
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Character select rendering update
+        function updateCharSelect() {
+            if (gameState === STATES.SELECT) {
+                renderCharacterSelect();
+            }
+            requestAnimationFrame(updateCharSelect);
+        }
+        
+        // Start
+        gameLoop();
+        updateCharSelect();
+    </script>
+</body>
+</html>

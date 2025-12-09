@@ -6,7 +6,7 @@ A browser-based action game series that progresses through the history of video 
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Status](https://img.shields.io/badge/status-in%20development-yellow.svg)
-![Seasons](https://img.shields.io/badge/seasons-2%20of%208-green.svg)
+![Seasons](https://img.shields.io/badge/seasons-8%20of%208-gold.svg)
 
 ---
 
@@ -35,12 +35,16 @@ The game's visual and mechanical complexity evolves with each season:
 |--------|-----|-----------------|---------------|--------|
 | 1 | Atari 2600 (1977-1983) | Combat, Adventure | The Awakening | ✅ Complete |
 | 2 | NES/SMS (1985-1992) | Contra, Ninja Gaiden | Training Day | ✅ Complete |
-| 3 | SNES/Genesis (1991-1996) | Streets of Rage, Metal Slug | The Mission Begins | 🔄 Next |
-| 4 | PS1/N64 (1995-2000) | Metal Gear Solid, GoldenEye | Bonds Tested | ⏳ Planned |
-| 5 | PS2/Xbox (2000-2005) | Splinter Cell, SOCOM | Revelations | ⏳ Planned |
-| 6 | PS3/360 (2005-2013) | Mass Effect, Uncharted | The Betrayal | ⏳ Planned |
-| 7 | PS4/XB1 (2013-2020) | MGSV, Horizon | Showdown | ⏳ Planned |
-| 8 | Current Gen | Photorealism/Stylized | The Capture & Resolution | ⏳ Planned |
+| 3 | SNES/Genesis (1991-1996) | Streets of Rage, Metal Slug | The Mission Begins | ✅ Complete |
+| 4 | PS1/N64 (1995-2000) | Metal Gear Solid, GoldenEye | Bonds Tested | ✅ Complete |
+| 5 | PS2/Xbox (2000-2005) | Splinter Cell, SOCOM | Revelations | ✅ Complete |
+| 6 | PS3/360 (2005-2013) | Uncharted, Gears of War | Shadows Rising | ✅ Complete |
+| 7 | PS4/XB1 (2013-2020) | The Last of Us, Metal Gear V | Showdown | ✅ Complete |
+| 8 | Current Gen (2020+) | Modern AAA | Resolution | ✅ Complete |
+
+**🎉 THE SPARROWS - COMPLETE SERIES 🎉**
+
+*From Atari to Current Gen. Eight seasons. Twenty years of story. Four sisters. One unbreakable bond.*
 
 ---
 
@@ -62,6 +66,76 @@ The game's visual and mechanical complexity evolves with each season:
 - **C** — Switch Character
 - Progress through 4 stages including boss battle
 
+### Season 3: The Mission Begins (SNES/Genesis Era)
+- **Arrow Keys** — Move (including up/down for depth)
+- **Z** — Attack (combo system)
+- **X** — Jump
+- **C** — Special Attack (uses energy)
+- **A** — Switch Character
+- Beat-em-up action across 4 stages with boss finale
+
+### Season 4: Bonds Tested (PS1/N64 Era)
+- **WASD/Arrows** — Move
+- **Shift** — Sneak (reduce visibility)
+- **Space** — Interact (doors, terminals)
+- **E** — CQC Takedown (from behind)
+- **Q** — Use Gadget
+- **Tab** — Codec
+- **ESC** — Pause
+- Tactical stealth across 4 missions
+
+### Season 5: Revelations (PS2/Xbox Era)
+- **WASD** — Move
+- **Shift** — Sprint
+- **Ctrl** — Toggle Crouch
+- **Space** — Take Cover / Interact
+- **E** — Takedown
+- **Q** — Ability
+- **F** — Cycle Vision Mode (Normal/Night/Thermal)
+- **Tab** — View Objectives
+- **ESC** — Pause
+- Advanced stealth with cover system across 3 international missions
+
+### Season 6: Shadows Rising (PS3/360 Era)
+- **WASD** — Move
+- **Space** — Jump / Take Cover
+- **Click** — Fire Weapon
+- **R** — Reload
+- **Q** — Character Ability
+- **1-4** — Squad Commands (Follow/Hold/Attack/Regroup)
+- **Tab** — View Objectives
+- **ESC** — Pause
+- HD cinematic action with squad-based combat across 3 missions
+
+### Season 7: Showdown (PS4/XB1 Era)
+- **WASD** — Move
+- **Shift** — Sprint
+- **Ctrl** — Crouch
+- **Space** — Take Cover
+- **Click** — Fire Weapon
+- **RMB** — Aim Down Sights
+- **R** — Reload
+- **Q** — Character Ability
+- **C** — Companion Command (Follow/Hold/Attack)
+- **H** — Use Medkit
+- **Tab** — Inventory & Crafting
+- **ESC** — Pause
+- Open-level stealth action with companion AI, crafting, and Viper boss battles
+
+### Season 8: Resolution (Current Gen - FINAL)
+- **WASD** — Move
+- **Shift** — Sprint
+- **Space** — Dodge Roll
+- **Click** — Fire Weapon
+- **RMB** — Aim Down Sights
+- **R** — Reload
+- **Q** — Character Ability
+- **E** — Ultimate Ability
+- **1-4** — Switch Active Character
+- **Tab** — Return to Hub
+- **ESC** — Pause
+- All four Sparrows playable with hot-swap, ultimate abilities, mission hub, and cinematic finale
+
 ---
 
 ## 📁 Project Structure
@@ -73,8 +147,20 @@ sparrows/
 ├── seasons/
 │   ├── season1-atari/
 │   │   └── index.html          # Episode 1: The Awakening
-│   └── season2-nes/
-│       └── index.html          # Episodes 2-4: Training Day
+│   ├── season2-nes/
+│   │   └── index.html          # Episodes 2-4: Training Day
+│   ├── season3-snes/
+│   │   └── index.html          # Episodes 3-4: The Mission Begins
+│   ├── season4-ps1/
+│   │   └── index.html          # Episodes 4-6: Bonds Tested
+│   ├── season5-ps2/
+│   │   └── index.html          # Episodes 7-9: Revelations
+│   ├── season6-ps3/
+│   │   └── index.html          # Episodes 10-12: Shadows Rising
+│   ├── season7-ps4/
+│   │   └── index.html          # Episodes 13-15: Showdown
+│   └── season8-current/
+│       └── index.html          # Episodes 16-18: Resolution (FINALE)
 ├── docs/
 │   ├── ORIGINS_BIBLE.md        # Character lore and world-building
 │   ├── GAME_DESIGN.md          # Technical design document
@@ -98,6 +184,42 @@ sparrows/
 - **Colors:** Full NES 2C02 PPU palette
 - **Audio:** Multi-voice chiptune synthesis
 - **Features:** Side-scrolling engine, cutscene system, character switching
+
+### Season 3 (SNES/Genesis)
+- **Resolution:** 320×224 native, scaled 3x
+- **Colors:** 16-bit palette with gradients
+- **Audio:** Enhanced multi-channel synthesis
+- **Features:** Beat-em-up engine, combo system, parallax backgrounds, depth sorting
+
+### Season 4 (PS1/N64)
+- **Resolution:** 320×240 native, scaled 3x
+- **Colors:** Muted tactical palette
+- **Audio:** Atmospheric synthesis with codec effects
+- **Features:** Stealth engine, vision cones, AI state machines, radar system, codec communications
+
+### Season 5 (PS2/Xbox)
+- **Resolution:** 512×384 native, scaled 2x
+- **Colors:** Full dynamic lighting palette
+- **Audio:** Enhanced synthesis with positional awareness
+- **Features:** Cover system, vision modes (Normal/Night/Thermal), advanced AI with hearing, dynamic lighting, film grain effects
+
+### Season 6 (PS3/360)
+- **Resolution:** 640×360 native, scaled 2x to 1280×720 (HD)
+- **Colors:** Full HD palette with gradients
+- **Audio:** Cinematic synthesis with character themes
+- **Features:** Squad command system, cover-based shooting, wave combat, boss battles, character abilities, cinematic cutscenes
+
+### Season 7 (PS4/XB1)
+- **Resolution:** 640×360 native, scaled 2x to 1280×720 (Full HD)
+- **Colors:** Modern realistic palette with atmospheric lighting
+- **Audio:** Advanced synthesis with environmental awareness
+- **Features:** Companion AI system, crafting/inventory, stealth visibility mechanics, enemy AI state machine (patrol/alert/combat/search), boss battles, stamina system, multiple objectives per level
+
+### Season 8 (Current Gen - FINAL)
+- **Resolution:** 640×360 native, scaled 2x to 1280×720 (Full HD)
+- **Colors:** Cinematic palette with gold/blue accents
+- **Audio:** Full synthesis with dynamic feedback
+- **Features:** All four Sparrows playable with real-time hot-swap, mission hub system, character-specific abilities AND ultimates, dodge roll with i-frames, combo system, shield regeneration, slow-motion ultimate (Oracle), Project Phoenix boss fight (4 enemy clones), progressive mission unlocking, credits sequence
 
 ---
 
@@ -169,4 +291,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-*"Aim with memory; fire with mercy."* — Anya Delgado
+*"Aim with memory; fire with mercy."* — Anya Delgado*"Aim with memory; fire with mercy."* — Anya Delgado

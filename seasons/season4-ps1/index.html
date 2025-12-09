@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE SPARROWS - Season 4: Bonds Tested</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+        }
+        
+        .game-container {
+            position: relative;
+            background: linear-gradient(145deg, #1a1a2e 0%, #0a0a15 100%);
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 
+                0 0 40px rgba(0, 255, 136, 0.1),
+                inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        .screen-frame {
+            position: relative;
+            background: #000;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+        }
+        
+        .scanline-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.1) 2px,
+                rgba(0, 0, 0, 0.1) 4px
+            );
+            pointer-events: none;
+        }
+        
+        .vignette-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%);
+            pointer-events: none;
+        }
+        
+        .controls-info {
+            margin-top: 15px;
+            color: #00ff88;
+            font-size: 11px;
+            text-align: center;
+            line-height: 1.8;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+        
+        .controls-info span {
+            color: #ffaa00;
+        }
+        
+        .era-badge {
+            position: absolute;
+            top: -25px;
+            right: 10px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 10px;
+            color: #00ff88;
+            letter-spacing: 3px;
+            text-shadow: 0 0 10px #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="era-badge">32-BIT ERA</div>
+        <div class="screen-frame">
+            <canvas id="gameCanvas" width="960" height="720"></canvas>
+            <div class="scanline-overlay"></div>
+            <div class="vignette-overlay"></div>
+        </div>
+    </div>
+    <div class="controls-info">
+        <span>WASD/ARROWS</span> MOVE | <span>SHIFT</span> SNEAK | <span>SPACE</span> ACTION | <span>E</span> TAKEDOWN | <span>Q</span> GADGET | <span>TAB</span> CODEC<br>
+        SEASON 4: BONDS TESTED — TACTICAL ESPIONAGE ACTION
+    </div>
+
+    <script>
+        // ============================================
+        // THE SPARROWS - SEASON 4: BONDS TESTED
+        // PS1/N64 Era (1995-2000)
+        // Tactical Espionage Action
+        // ============================================
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // PS1-style resolution (320×240 scaled 3x)
+        const NATIVE_WIDTH = 320;
+        const NATIVE_HEIGHT = 240;
+        const SCALE = 3;
+        
+        canvas.width = NATIVE_WIDTH * SCALE;
+        canvas.height = NATIVE_HEIGHT * SCALE;
+        
+        // PS1 Color Palette (muted, atmospheric)
+        const COLORS = {
+            // Base colors
+            black: '#0a0a0f',
+            darkGray: '#1a1a24',
+            gray: '#3a3a4a',
+            lightGray: '#6a6a7a',
+            white: '#c0c0d0',
+            
+            // Tactical greens
+            darkGreen: '#0a2a1a',
+            green: '#00ff88',
+            lightGreen: '#88ffbb',
+            olive: '#4a5a2a',
+            
+            // Alert reds
+            darkRed: '#2a0a0a',
+            red: '#ff3344',
+            orange: '#ff8844',
+            
+            // Tech blues
+            darkBlue: '#0a1a2a',
+            blue: '#4488ff',
+            cyan: '#44ddff',
+            
+            // Yellows
+            yellow: '#ffdd44',
+            gold: '#ffaa00',
+            
+            // Environment
+            concrete: '#4a4a5a',
+            metal: '#5a6a7a',
+            rust: '#6a4a3a',
+            
+            // Skin tones
+            skin1: '#d4a574',
+            skin2: '#c49464',
+            skin3: '#8b6242',
+            
+            // Shadow
+            shadow: 'rgba(0,0,0,0.5)'
+        };
+        
+        // Game States
+        const STATE = {
+            TITLE: 0,
+            SELECT: 1,
+            BRIEFING: 2,
+            PLAYING: 3,
+            ALERT: 4,
+            CODEC: 5,
+            CUTSCENE: 6,
+            BOSS: 7,
+            GAME_OVER: 8,
+            VICTORY: 9,
+            PAUSE: 10
+        };
+        
+        let gameState = STATE.TITLE;
+        let prevState = STATE.TITLE;
+        let stateTimer = 0;
+        let globalTimer = 0;
+        let alertLevel = 0; // 0=stealth, 1=caution, 2=alert, 3=evasion
+        let alertTimer = 0;
+        
+        // Characters
+        const CHARACTERS = [
+            {
+                name: 'NATASHA',
+                codename: 'CIPHER',
+                specialty: 'ELECTRONIC WARFARE',
+                color: COLORS.cyan,
+                darkColor: COLORS.darkBlue,
+                gadget: 'EMP DEVICE',
+                gadgetDesc: 'DISABLES ELECTRONICS',
+                stealth: 9,
+                combat: 6,
+                tech: 10
+            },
+            {
+                name: 'MARIA',
+                codename: 'VENOM',
+                specialty: 'CQC EXPERT',
+                color: COLORS.lightGreen,
+                darkColor: COLORS.darkGreen,
+                gadget: 'STUN BATON',
+                gadgetDesc: 'SILENT TAKEDOWNS',
+                stealth: 7,
+                combat: 10,
+                tech: 5
+            },
+            {
+                name: 'ANYA',
+                codename: 'HAWK',
+                specialty: 'MARKSMAN',
+                color: COLORS.orange,
+                darkColor: COLORS.rust,
+                gadget: 'TRANQ PISTOL',
+                gadgetDesc: 'RANGED NEUTRALIZE',
+                stealth: 8,
+                combat: 8,
+                tech: 6
+            },
+            {
+                name: 'OLGA',
+                codename: 'ORACLE',
+                specialty: 'INTELLIGENCE',
+                color: COLORS.gold,
+                darkColor: COLORS.olive,
+                gadget: 'RECON DRONE',
+                gadgetDesc: 'AREA SURVEILLANCE',
+                stealth: 10,
+                combat: 5,
+                tech: 9
+            }
+        ];
+        
+        // Player state
+        let player = {
+            x: 50,
+            y: 180,
+            angle: 0,
+            speed: 0,
+            maxSpeed: 2,
+            sneakSpeed: 0.8,
+            width: 12,
+            height: 12,
+            charIndex: 0,
+            health: 100,
+            maxHealth: 100,
+            gadgetAmmo: 3,
+            maxGadgetAmmo: 3,
+            
+            state: 'idle', // idle, moving, sneaking, action, hurt
+            sneaking: false,
+            visible: true,
+            detected: false,
+            
+            animFrame: 0,
+            animTimer: 0
+        };
+        
+        // Mission data
+        const MISSIONS = [
+            {
+                name: 'SHADOW PROTOCOL',
+                briefing: 'INFILTRATE THE ABANDONED FACILITY. INTEL SUGGESTS A MOLE IN OUR RANKS.',
+                width: 400,
+                height: 300,
+                objectives: ['REACH THE SERVER ROOM', 'DOWNLOAD INTEL', 'EXTRACT'],
+                theme: 'facility'
+            },
+            {
+                name: 'BROKEN TRUST',
+                briefing: 'THE INTEL REVEALS CLASSIFIED SPARROW FILES. SOMEONE HAS BEEN WATCHING US.',
+                width: 450,
+                height: 320,
+                objectives: ['INVESTIGATE SURVEILLANCE POST', 'FIND EVIDENCE', 'IDENTIFY THE MOLE'],
+                theme: 'surveillance'
+            },
+            {
+                name: 'DIVIDED LOYALTIES',
+                briefing: 'OLGA HAS GONE DARK. HER LAST TRANSMISSION MENTIONED "PROJECT MOCKINGBIRD".',
+                width: 500,
+                height: 350,
+                objectives: ['LOCATE OLGA', 'UNCOVER PROJECT MOCKINGBIRD', 'MAKE A CHOICE'],
+                theme: 'compound'
+            },
+            {
+                name: 'THE BETRAYER',
+                briefing: 'THE TRUTH IS REVEALED. CONFRONT THE ONE WHO SOLD US OUT.',
+                width: 300,
+                height: 250,
+                objectives: ['REACH THE COMMAND CENTER', 'CONFRONT THE BETRAYER', 'SURVIVE'],
+                theme: 'boss',
+                isBoss: true
+            }
+        ];
+        
+        let currentMission = 0;
+        let mission = null;
+        let objectives = [];
+        let objectivesComplete = 0;
+        
+        // Level entities
+        let guards = [];
+        let cameras = [];
+        let items = [];
+        let walls = [];
+        let doors = [];
+        let terminals = [];
+        let triggers = [];
+        let projectiles = [];
+        let particles = [];
+        
+        // Camera
+        let cameraX = 0;
+        let cameraY = 0;
+        
+        // Radar
+        const RADAR_SIZE = 60;
+        const RADAR_RANGE = 120;
+        
+        // Codec system
+        let codecActive = false;
+        let codecMessages = [];
+        let codecIndex = 0;
+        let codecText = '';
+        let codecCharIndex = 0;
+        let codecTimer = 0;
+        let codecCallback = null;
+        
+        // Cutscenes
+        const CUTSCENES = {
+            intro: [
+                { speaker: 'COMMANDER', freq: '140.85', text: 'SPARROWS, WE HAVE A PROBLEM.' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'WHAT KIND OF PROBLEM?' },
+                { speaker: 'COMMANDER', freq: '140.85', text: 'VIPER\'S INTEL... IT CHECKS OUT.' },
+                { speaker: 'COMMANDER', freq: '140.85', text: 'SOMEONE IN THE DIRECTORATE HAS BEEN FEEDING INFORMATION TO THE ENEMY.' },
+                { speaker: 'MARIA', freq: '141.52', text: 'A MOLE? INSIDE OUR OWN ORGANIZATION?' },
+                { speaker: 'COMMANDER', freq: '140.85', text: 'WORSE. THE LEAK COMES FROM SOMEONE WITH ACCESS TO PROJECT SPARROW FILES.' },
+                { speaker: 'ANYA', freq: '141.80', text: '...THAT MEANS ONE OF US.' },
+                { speaker: 'OLGA', freq: '142.00', text: 'OR SOMEONE VERY CLOSE TO US.' },
+                { speaker: 'COMMANDER', freq: '140.85', text: 'YOUR MISSION: INFILTRATE THE OLD RESEARCH FACILITY. FIND THE TRUTH.' }
+            ],
+            mission2: [
+                { speaker: 'NATASHA', freq: '141.12', text: 'THE SERVER DATA... IT\'S ALL HERE.' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'SURVEILLANCE LOGS. COMMUNICATION INTERCEPTS. PSYCH EVALUATIONS.' },
+                { speaker: 'MARIA', freq: '141.52', text: 'THEY\'VE BEEN WATCHING US SINCE THE BEGINNING?' },
+                { speaker: 'ANYA', freq: '141.80', text: 'NOT JUST WATCHING. TESTING.' },
+                { speaker: 'OLGA', freq: '142.00', text: 'I FOUND SOMETHING. PROJECT MOCKINGBIRD.' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'WHAT IS IT?' },
+                { speaker: 'OLGA', freq: '142.00', text: 'I... I NEED TO VERIFY SOMETHING. ALONE.' },
+                { speaker: 'MARIA', freq: '141.52', text: 'OLGA, WAIT—' },
+                { speaker: 'SYSTEM', freq: '000.00', text: 'CONNECTION LOST: ORACLE' }
+            ],
+            mission3: [
+                { speaker: 'ANYA', freq: '141.80', text: 'OLGA\'S TRACKER WENT DARK HERE.' },
+                { speaker: 'MARIA', freq: '141.52', text: 'SOMETHING\'S NOT RIGHT. WHY WOULD SHE GO ALONE?' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'I\'VE BEEN ANALYZING THE PROJECT MOCKINGBIRD FILES.' },
+                { speaker: 'ANYA', freq: '141.80', text: 'AND?' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'IT\'S A CONTINGENCY PROTOCOL. IN CASE A SPARROW GOES ROGUE.' },
+                { speaker: 'MARIA', freq: '141.52', text: 'YOU MEAN... THEY PLANNED FOR ONE OF US TO BETRAY THE OTHERS?' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'NOT PLANNED. ENSURED.' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'ONE OF US WAS DESIGNED TO BE THE TRAITOR FROM THE START.' }
+            ],
+            boss: [
+                { speaker: '???', freq: '???', text: 'YOU FOUND ME.' },
+                { speaker: 'PLAYER', freq: '141.XX', text: 'IT WAS YOU ALL ALONG.' },
+                { speaker: 'BETRAYER', freq: '???', text: 'I HAD NO CHOICE. THEY PROGRAMMED IT INTO ME.' },
+                { speaker: 'BETRAYER', freq: '???', text: 'EVERY MEMORY. EVERY BOND. EVERY MOMENT OF TRUST.' },
+                { speaker: 'BETRAYER', freq: '???', text: 'ALL DESIGNED TO MAKE THIS MOMENT HURT MORE.' },
+                { speaker: 'PLAYER', freq: '141.XX', text: 'WE CAN FIGHT THIS TOGETHER.' },
+                { speaker: 'BETRAYER', freq: '???', text: 'NO. THERE\'S ONLY ONE WAY THIS ENDS.' },
+                { speaker: 'BETRAYER', freq: '???', text: 'PROVE YOU\'RE STRONGER THAN WHAT THEY MADE ME.' }
+            ],
+            victory: [
+                { speaker: 'COMMANDER', freq: '140.85', text: 'MISSION COMPLETE. THE MOLE HAS BEEN... NEUTRALIZED.' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'SHE WASN\'T A TRAITOR. SHE WAS A VICTIM.' },
+                { speaker: 'MARIA', freq: '141.52', text: 'WE ALL ARE. PAWNS IN SOMEONE ELSE\'S GAME.' },
+                { speaker: 'ANYA', freq: '141.80', text: 'THEN WE CHANGE THE GAME.' },
+                { speaker: 'COMMANDER', freq: '140.85', text: 'CAREFUL, SPARROWS. THAT KIND OF TALK—' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'THAT KIND OF TALK IS WHY WE\'RE STILL ALIVE.' },
+                { speaker: 'NATASHA', freq: '141.12', text: 'WE\'RE DONE BEING CONTROLLED.' },
+                { speaker: 'SYSTEM', freq: '000.00', text: 'TO BE CONTINUED IN SEASON 5...' }
+            ]
+        };
+        
+        let currentCutscene = null;
+        
+        // Input
+        const keys = {};
+        const keyJustPressed = {};
+        let prevKeys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 
+                 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'Tab', 'ShiftLeft', 'Escape'].includes(e.code)) {
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        function updateInput() {
+            for (let key in keys) {
+                keyJustPressed[key] = keys[key] && !prevKeys[key];
+            }
+            prevKeys = { ...keys };
+        }
+        
+        // Audio
+        let audioCtx = null;
+        
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        function playTone(freq, duration, type = 'sine', volume = 0.08) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+        
+        const SFX = {
+            step: () => playTone(100 + Math.random() * 50, 0.05, 'square', 0.03),
+            alert: () => {
+                playTone(800, 0.1, 'square', 0.15);
+                setTimeout(() => playTone(600, 0.1, 'square', 0.12), 100);
+                setTimeout(() => playTone(800, 0.15, 'square', 0.15), 200);
+            },
+            caution: () => {
+                playTone(400, 0.3, 'sine', 0.1);
+            },
+            codec: () => playTone(1200, 0.05, 'sine', 0.08),
+            codecOpen: () => {
+                playTone(800, 0.1, 'sine', 0.1);
+                setTimeout(() => playTone(1000, 0.1, 'sine', 0.08), 80);
+                setTimeout(() => playTone(1200, 0.15, 'sine', 0.06), 160);
+            },
+            takedown: () => {
+                playTone(150, 0.1, 'sawtooth', 0.12);
+                playTone(100, 0.15, 'square', 0.1);
+            },
+            gadget: () => {
+                playTone(600, 0.1, 'sine', 0.1);
+                setTimeout(() => playTone(900, 0.15, 'sine', 0.08), 100);
+            },
+            pickup: () => {
+                playTone(880, 0.08, 'sine', 0.1);
+                setTimeout(() => playTone(1100, 0.12, 'sine', 0.08), 60);
+            },
+            hurt: () => {
+                playTone(200, 0.2, 'sawtooth', 0.15);
+                playTone(150, 0.25, 'square', 0.1);
+            },
+            objective: () => {
+                [523, 659, 784, 1047].forEach((f, i) => {
+                    setTimeout(() => playTone(f, 0.15, 'sine', 0.1), i * 100);
+                });
+            },
+            gameOver: () => {
+                [400, 350, 300, 200].forEach((f, i) => {
+                    setTimeout(() => playTone(f, 0.3, 'sine', 0.1), i * 200);
+                });
+            },
+            select: () => playTone(600, 0.08, 'sine', 0.08),
+            confirm: () => {
+                playTone(800, 0.1, 'sine', 0.1);
+                setTimeout(() => playTone(1000, 0.15, 'sine', 0.08), 100);
+            }
+        };
+        
+        // Game functions
+        function startGame() {
+            initAudio();
+            currentMission = 0;
+            player.health = player.maxHealth;
+            player.gadgetAmmo = player.maxGadgetAmmo;
+            loadMission(currentMission);
+            startCutscene('intro');
+        }
+        
+        function loadMission(index) {
+            mission = MISSIONS[index];
+            objectives = [...mission.objectives];
+            objectivesComplete = 0;
+            
+            guards = [];
+            cameras = [];
+            items = [];
+            walls = [];
+            doors = [];
+            terminals = [];
+            triggers = [];
+            projectiles = [];
+            particles = [];
+            
+            player.x = 30;
+            player.y = mission.height - 40;
+            player.health = player.maxHealth;
+            player.gadgetAmmo = player.maxGadgetAmmo;
+            player.detected = false;
+            player.state = 'idle';
+            
+            alertLevel = 0;
+            alertTimer = 0;
+            
+            cameraX = 0;
+            cameraY = mission.height - NATIVE_HEIGHT;
+            
+            generateMission(index);
+        }
+        
+        function generateMission(index) {
+            const m = mission;
+            
+            // Border walls
+            walls.push({ x: 0, y: 0, w: m.width, h: 8, type: 'wall' });
+            walls.push({ x: 0, y: m.height - 8, w: m.width, h: 8, type: 'wall' });
+            walls.push({ x: 0, y: 0, w: 8, h: m.height, type: 'wall' });
+            walls.push({ x: m.width - 8, y: 0, w: 8, h: m.height, type: 'wall' });
+            
+            if (index === 0) {
+                // Mission 1: Facility infiltration
+                // Interior walls
+                walls.push({ x: 80, y: 0, w: 8, h: 150, type: 'wall' });
+                walls.push({ x: 80, y: 180, w: 8, h: 120, type: 'wall' });
+                walls.push({ x: 180, y: 100, w: 120, h: 8, type: 'wall' });
+                walls.push({ x: 180, y: 200, w: 8, h: 100, type: 'wall' });
+                walls.push({ x: 280, y: 0, w: 8, h: 80, type: 'wall' });
+                walls.push({ x: 280, y: 150, w: 8, h: 150, type: 'wall' });
+                
+                // Doors
+                doors.push({ x: 80, y: 150, w: 8, h: 30, open: false, keycard: false });
+                doors.push({ x: 280, y: 80, w: 8, h: 70, open: false, keycard: true });
+                
+                // Guards
+                guards.push(createGuard(150, 250, 0, 'patrol', [{ x: 150, y: 250 }, { x: 150, y: 150 }]));
+                guards.push(createGuard(220, 150, Math.PI, 'stationary'));
+                guards.push(createGuard(350, 200, Math.PI / 2, 'patrol', [{ x: 350, y: 200 }, { x: 350, y: 80 }]));
+                
+                // Cameras
+                cameras.push({ x: 120, y: 20, angle: Math.PI / 2, range: 80, fov: Math.PI / 3, sweepDir: 1, sweepRange: Math.PI / 4 });
+                cameras.push({ x: 250, y: 110, angle: Math.PI, range: 70, fov: Math.PI / 4, sweepDir: -1, sweepRange: Math.PI / 3 });
+                
+                // Items
+                items.push({ x: 130, y: 280, type: 'keycard' });
+                items.push({ x: 350, y: 280, type: 'ammo' });
+                
+                // Terminals
+                terminals.push({ x: 340, y: 50, w: 20, h: 20, id: 'server', hacked: false });
+                
+                // Objective triggers
+                triggers.push({ x: 320, y: 30, w: 60, h: 50, objective: 0, triggered: false });
+                triggers.push({ x: 340, y: 50, w: 20, h: 20, objective: 1, triggered: false, requiresHack: true });
+                triggers.push({ x: 20, y: m.height - 50, w: 40, h: 40, objective: 2, triggered: false, requiresAll: true });
+                
+            } else if (index === 1) {
+                // Mission 2: Surveillance post
+                walls.push({ x: 100, y: 50, w: 8, h: 200, type: 'wall' });
+                walls.push({ x: 200, y: 0, w: 8, h: 150, type: 'wall' });
+                walls.push({ x: 200, y: 200, w: 8, h: 120, type: 'wall' });
+                walls.push({ x: 300, y: 100, w: 8, h: 220, type: 'wall' });
+                walls.push({ x: 100, y: 250, w: 200, h: 8, type: 'wall' });
+                
+                doors.push({ x: 100, y: 250, w: 30, h: 8, open: false, keycard: false });
+                doors.push({ x: 200, y: 150, w: 8, h: 50, open: false, keycard: true });
+                
+                guards.push(createGuard(150, 150, 0, 'patrol', [{ x: 150, y: 150 }, { x: 150, y: 80 }]));
+                guards.push(createGuard(250, 100, Math.PI / 2, 'stationary'));
+                guards.push(createGuard(350, 250, Math.PI, 'patrol', [{ x: 350, y: 250 }, { x: 400, y: 250 }]));
+                guards.push(createGuard(250, 280, 0, 'patrol', [{ x: 250, y: 280 }, { x: 180, y: 280 }]));
+                
+                cameras.push({ x: 20, y: 60, angle: 0, range: 90, fov: Math.PI / 3, sweepDir: 1, sweepRange: Math.PI / 3 });
+                cameras.push({ x: 180, y: 20, angle: Math.PI / 2, range: 80, fov: Math.PI / 4, sweepDir: -1, sweepRange: Math.PI / 4 });
+                cameras.push({ x: 380, y: 150, angle: Math.PI, range: 70, fov: Math.PI / 3, sweepDir: 1, sweepRange: Math.PI / 4 });
+                
+                items.push({ x: 60, y: 100, type: 'health' });
+                items.push({ x: 160, y: 200, type: 'keycard' });
+                items.push({ x: 380, y: 60, type: 'ammo' });
+                
+                terminals.push({ x: 250, y: 50, w: 20, h: 20, id: 'surveillance', hacked: false });
+                terminals.push({ x: 380, y: 280, w: 20, h: 20, id: 'evidence', hacked: false });
+                
+                triggers.push({ x: 230, y: 30, w: 60, h: 50, objective: 0, triggered: false });
+                triggers.push({ x: 360, y: 260, w: 50, h: 50, objective: 1, triggered: false, requiresHack: true });
+                triggers.push({ x: 250, y: 50, w: 20, h: 20, objective: 2, triggered: false, requiresHack: true });
+                
+            } else if (index === 2) {
+                // Mission 3: Compound - find Olga
+                walls.push({ x: 100, y: 0, w: 8, h: 120, type: 'wall' });
+                walls.push({ x: 100, y: 180, w: 8, h: 170, type: 'wall' });
+                walls.push({ x: 200, y: 80, w: 8, h: 190, type: 'wall' });
+                walls.push({ x: 200, y: 300, w: 8, h: 50, type: 'wall' });
+                walls.push({ x: 300, y: 0, w: 8, h: 200, type: 'wall' });
+                walls.push({ x: 300, y: 250, w: 8, h: 100, type: 'wall' });
+                walls.push({ x: 400, y: 100, w: 8, h: 250, type: 'wall' });
+                walls.push({ x: 100, y: 120, w: 100, h: 8, type: 'wall' });
+                walls.push({ x: 300, y: 200, w: 100, h: 8, type: 'wall' });
+                
+                doors.push({ x: 100, y: 120, w: 8, h: 60, open: false, keycard: false });
+                doors.push({ x: 200, y: 270, w: 8, h: 30, open: false, keycard: true });
+                doors.push({ x: 300, y: 200, w: 8, h: 50, open: false, keycard: true });
+                
+                guards.push(createGuard(150, 250, 0, 'patrol', [{ x: 150, y: 250 }, { x: 150, y: 200 }]));
+                guards.push(createGuard(250, 200, Math.PI, 'patrol', [{ x: 250, y: 200 }, { x: 250, y: 100 }]));
+                guards.push(createGuard(350, 150, Math.PI / 2, 'stationary'));
+                guards.push(createGuard(450, 250, Math.PI, 'patrol', [{ x: 450, y: 250 }, { x: 450, y: 150 }]));
+                guards.push(createGuard(350, 300, 0, 'patrol', [{ x: 350, y: 300 }, { x: 420, y: 300 }]));
+                
+                cameras.push({ x: 50, y: 50, angle: Math.PI / 4, range: 80, fov: Math.PI / 3, sweepDir: 1, sweepRange: Math.PI / 3 });
+                cameras.push({ x: 280, y: 50, angle: Math.PI / 2, range: 90, fov: Math.PI / 4, sweepDir: -1, sweepRange: Math.PI / 4 });
+                cameras.push({ x: 480, y: 120, angle: Math.PI, range: 70, fov: Math.PI / 3, sweepDir: 1, sweepRange: Math.PI / 3 });
+                
+                items.push({ x: 50, y: 200, type: 'health' });
+                items.push({ x: 170, y: 50, type: 'keycard' });
+                items.push({ x: 280, y: 280, type: 'keycard' });
+                items.push({ x: 450, y: 50, type: 'ammo' });
+                
+                terminals.push({ x: 450, y: 300, w: 20, h: 20, id: 'mockingbird', hacked: false });
+                
+                // Olga location
+                triggers.push({ x: 420, y: 280, w: 60, h: 60, objective: 0, triggered: false });
+                triggers.push({ x: 450, y: 300, w: 20, h: 20, objective: 1, triggered: false, requiresHack: true });
+                triggers.push({ x: 450, y: 300, w: 20, h: 20, objective: 2, triggered: false, requiresAll: true });
+                
+            } else if (index === 3) {
+                // Boss mission
+                walls.push({ x: 100, y: 0, w: 8, h: 100, type: 'wall' });
+                walls.push({ x: 100, y: 150, w: 8, h: 100, type: 'wall' });
+                walls.push({ x: 192, y: 0, w: 8, h: 80, type: 'wall' });
+                walls.push({ x: 192, y: 170, w: 8, h: 80, type: 'wall' });
+                
+                doors.push({ x: 100, y: 100, w: 8, h: 50, open: false, keycard: false });
+                doors.push({ x: 192, y: 80, w: 8, h: 90, open: false, keycard: true });
+                
+                guards.push(createGuard(150, 200, 0, 'stationary'));
+                
+                items.push({ x: 50, y: 50, type: 'keycard' });
+                items.push({ x: 50, y: 200, type: 'health' });
+                
+                triggers.push({ x: 220, y: 100, w: 60, h: 50, objective: 0, triggered: false });
+                triggers.push({ x: 220, y: 100, w: 60, h: 50, objective: 1, triggered: false, requiresAll: false, startsBoss: true });
+            }
+        }
+        
+        function createGuard(x, y, angle, behavior, patrol = null) {
+            return {
+                x, y, angle,
+                behavior,
+                patrol,
+                patrolIndex: 0,
+                patrolDir: 1,
+                speed: 1,
+                viewDistance: 70,
+                viewAngle: Math.PI / 3,
+                state: 'patrol', // patrol, alert, chase, search
+                alertTimer: 0,
+                lastKnownX: 0,
+                lastKnownY: 0,
+                searchTimer: 0,
+                stunned: false,
+                stunnedTimer: 0,
+                alive: true
+            };
+        }
+        
+        function startCutscene(name) {
+            currentCutscene = name;
+            codecMessages = CUTSCENES[name] || [];
+            if (codecMessages.length === 0) {
+                gameState = mission.isBoss ? STATE.BOSS : STATE.PLAYING;
+                return;
+            }
+            codecIndex = 0;
+            codecText = '';
+            codecCharIndex = 0;
+            codecTimer = 0;
+            codecActive = true;
+            gameState = STATE.CODEC;
+            SFX.codecOpen();
+        }
+        
+        // Update functions
+        function update() {
+            updateInput();
+            globalTimer++;
+            stateTimer++;
+            
+            switch (gameState) {
+                case STATE.TITLE:
+                    if (keyJustPressed['Space'] || keyJustPressed['Enter']) {
+                        gameState = STATE.SELECT;
+                        stateTimer = 0;
+                        SFX.confirm();
+                    }
+                    break;
+                    
+                case STATE.SELECT:
+                    if (keyJustPressed['ArrowLeft'] || keyJustPressed['KeyA']) {
+                        player.charIndex = (player.charIndex + 3) % 4;
+                        SFX.select();
+                    }
+                    if (keyJustPressed['ArrowRight'] || keyJustPressed['KeyD']) {
+                        player.charIndex = (player.charIndex + 1) % 4;
+                        SFX.select();
+                    }
+                    if (keyJustPressed['Space'] || keyJustPressed['Enter']) {
+                        startGame();
+                        SFX.confirm();
+                    }
+                    break;
+                    
+                case STATE.CODEC:
+                    updateCodec();
+                    break;
+                    
+                case STATE.PLAYING:
+                case STATE.ALERT:
+                case STATE.BOSS:
+                    updateGameplay();
+                    break;
+                    
+                case STATE.GAME_OVER:
+                    if (stateTimer > 180 && (keyJustPressed['Space'] || keyJustPressed['Enter'])) {
+                        gameState = STATE.TITLE;
+                        stateTimer = 0;
+                    }
+                    break;
+                    
+                case STATE.VICTORY:
+                    if (stateTimer > 200 && (keyJustPressed['Space'] || keyJustPressed['Enter'])) {
+                        gameState = STATE.TITLE;
+                        stateTimer = 0;
+                    }
+                    break;
+                    
+                case STATE.PAUSE:
+                    if (keyJustPressed['Escape']) {
+                        gameState = prevState;
+                    }
+                    break;
+            }
+        }
+        
+        function updateCodec() {
+            if (!codecMessages || codecIndex >= codecMessages.length) {
+                codecActive = false;
+                if (currentCutscene === 'victory') {
+                    gameState = STATE.VICTORY;
+                } else {
+                    gameState = mission.isBoss ? STATE.BOSS : STATE.PLAYING;
+                }
+                currentCutscene = null;
+                return;
+            }
+            
+            const msg = codecMessages[codecIndex];
+            codecTimer++;
+            
+            // Typewriter
+            if (codecCharIndex < msg.text.length) {
+                if (codecTimer % 2 === 0) {
+                    codecText += msg.text[codecCharIndex];
+                    codecCharIndex++;
+                    if (codecCharIndex % 2 === 0) SFX.codec();
+                }
+            }
+            
+            if (keyJustPressed['Space'] || keyJustPressed['Enter']) {
+                if (codecCharIndex < msg.text.length) {
+                    codecText = msg.text;
+                    codecCharIndex = msg.text.length;
+                } else {
+                    codecIndex++;
+                    codecText = '';
+                    codecCharIndex = 0;
+                    codecTimer = 0;
+                    SFX.select();
+                }
+            }
+        }
+        
+        function updateGameplay() {
+            // Pause
+            if (keyJustPressed['Escape']) {
+                prevState = gameState;
+                gameState = STATE.PAUSE;
+                return;
+            }
+            
+            // Codec
+            if (keyJustPressed['Tab']) {
+                // Quick codec hint
+            }
+            
+            const char = CHARACTERS[player.charIndex];
+            
+            // Movement
+            let dx = 0, dy = 0;
+            if (keys['ArrowUp'] || keys['KeyW']) dy = -1;
+            if (keys['ArrowDown'] || keys['KeyS']) dy = 1;
+            if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
+            if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
+            
+            // Normalize diagonal
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.707;
+                dy *= 0.707;
+            }
+            
+            // Sneak
+            player.sneaking = keys['ShiftLeft'] || keys['ShiftRight'];
+            const speed = player.sneaking ? player.sneakSpeed : player.maxSpeed;
+            
+            // Apply movement
+            const newX = player.x + dx * speed;
+            const newY = player.y + dy * speed;
+            
+            // Collision check
+            if (!checkWallCollision(newX, player.y, player.width, player.height)) {
+                player.x = newX;
+            }
+            if (!checkWallCollision(player.x, newY, player.width, player.height)) {
+                player.y = newY;
+            }
+            
+            // Update angle
+            if (dx !== 0 || dy !== 0) {
+                player.angle = Math.atan2(dy, dx);
+                player.state = player.sneaking ? 'sneaking' : 'moving';
+                
+                // Footstep sounds
+                if (!player.sneaking && globalTimer % 15 === 0) {
+                    SFX.step();
+                }
+            } else {
+                player.state = 'idle';
+            }
+            
+            // Action (interact)
+            if (keyJustPressed['Space']) {
+                // Check doors
+                doors.forEach(door => {
+                    if (distance(player.x, player.y, door.x, door.y + door.h / 2) < 25) {
+                        if (door.keycard) {
+                            const hasKeycard = items.filter(i => i.collected && i.type === 'keycard').length > 0;
+                            if (hasKeycard || door.open) {
+                                door.open = !door.open;
+                                SFX.confirm();
+                            } else {
+                                // Need keycard message
+                            }
+                        } else {
+                            door.open = !door.open;
+                            SFX.confirm();
+                        }
+                    }
+                });
+                
+                // Check terminals
+                terminals.forEach(term => {
+                    if (!term.hacked && distance(player.x, player.y, term.x + term.w / 2, term.y + term.h / 2) < 25) {
+                        term.hacked = true;
+                        SFX.gadget();
+                        spawnParticles(term.x + term.w / 2, term.y + term.h / 2, COLORS.green, 10);
+                    }
+                });
+            }
+            
+            // Takedown (E)
+            if (keyJustPressed['KeyE']) {
+                guards.forEach(guard => {
+                    if (guard.alive && !guard.stunned && distance(player.x, player.y, guard.x, guard.y) < 20) {
+                        // Check if behind
+                        const angleToPlayer = Math.atan2(player.y - guard.y, player.x - guard.x);
+                        const angleDiff = Math.abs(normalizeAngle(angleToPlayer - guard.angle));
+                        
+                        if (angleDiff > Math.PI / 2) {
+                            // Successful takedown
+                            guard.stunned = true;
+                            guard.stunnedTimer = 600;
+                            guard.alive = false;
+                            SFX.takedown();
+                            spawnParticles(guard.x, guard.y, COLORS.red, 8);
+                        }
+                    }
+                });
+            }
+            
+            // Gadget (Q)
+            if (keyJustPressed['KeyQ'] && player.gadgetAmmo > 0) {
+                useGadget(char);
+                player.gadgetAmmo--;
+            }
+            
+            // Collect items
+            items.forEach(item => {
+                if (!item.collected && distance(player.x, player.y, item.x, item.y) < 15) {
+                    item.collected = true;
+                    SFX.pickup();
+                    
+                    if (item.type === 'health') {
+                        player.health = Math.min(player.maxHealth, player.health + 30);
+                    } else if (item.type === 'ammo') {
+                        player.gadgetAmmo = Math.min(player.maxGadgetAmmo, player.gadgetAmmo + 1);
+                    }
+                    
+                    spawnParticles(item.x, item.y, COLORS.yellow, 6);
+                }
+            });
+            
+            // Check triggers
+            triggers.forEach(trigger => {
+                if (!trigger.triggered && 
+                    player.x > trigger.x && player.x < trigger.x + trigger.w &&
+                    player.y > trigger.y && player.y < trigger.y + trigger.h) {
+                    
+                    if (trigger.requiresHack) {
+                        const term = terminals.find(t => 
+                            t.x >= trigger.x - 10 && t.x <= trigger.x + trigger.w + 10 &&
+                            t.y >= trigger.y - 10 && t.y <= trigger.y + trigger.h + 10
+                        );
+                        if (!term || !term.hacked) return;
+                    }
+                    
+                    if (trigger.requiresAll && objectivesComplete < objectives.length - 1) return;
+                    
+                    trigger.triggered = true;
+                    objectivesComplete++;
+                    SFX.objective();
+                    
+                    if (trigger.startsBoss) {
+                        startCutscene('boss');
+                        return;
+                    }
+                    
+                    // Check mission complete
+                    if (objectivesComplete >= objectives.length) {
+                        if (currentMission >= MISSIONS.length - 1) {
+                            startCutscene('victory');
+                        } else {
+                            currentMission++;
+                            loadMission(currentMission);
+                            const cutsceneKey = 'mission' + (currentMission + 1);
+                            if (CUTSCENES[cutsceneKey]) {
+                                startCutscene(cutsceneKey);
+                            } else {
+                                gameState = STATE.PLAYING;
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Update guards
+            updateGuards();
+            
+            // Update cameras
+            updateCameras();
+            
+            // Update projectiles
+            updateProjectiles();
+            
+            // Update particles
+            updateParticles();
+            
+            // Update alert
+            updateAlert();
+            
+            // Camera follow
+            const targetCamX = player.x - NATIVE_WIDTH / 2;
+            const targetCamY = player.y - NATIVE_HEIGHT / 2;
+            cameraX += (targetCamX - cameraX) * 0.1;
+            cameraY += (targetCamY - cameraY) * 0.1;
+            
+            // Clamp camera
+            cameraX = Math.max(0, Math.min(mission.width - NATIVE_WIDTH, cameraX));
+            cameraY = Math.max(0, Math.min(mission.height - NATIVE_HEIGHT, cameraY));
+            
+            // Animation
+            player.animTimer++;
+            if (player.animTimer > 8) {
+                player.animTimer = 0;
+                player.animFrame = (player.animFrame + 1) % 4;
+            }
+        }
+        
+        function useGadget(char) {
+            SFX.gadget();
+            
+            if (char.name === 'NATASHA') {
+                // EMP - disable nearby electronics
+                cameras.forEach(cam => {
+                    if (distance(player.x, player.y, cam.x, cam.y) < 80) {
+                        cam.disabled = true;
+                        cam.disabledTimer = 300;
+                    }
+                });
+                guards.forEach(guard => {
+                    if (guard.alive && distance(player.x, player.y, guard.x, guard.y) < 60) {
+                        guard.stunned = true;
+                        guard.stunnedTimer = 180;
+                    }
+                });
+                spawnParticles(player.x, player.y, COLORS.cyan, 20);
+                
+            } else if (char.name === 'MARIA') {
+                // Stun baton - extended takedown range
+                guards.forEach(guard => {
+                    if (guard.alive && distance(player.x, player.y, guard.x, guard.y) < 35) {
+                        guard.stunned = true;
+                        guard.stunnedTimer = 600;
+                        guard.alive = false;
+                        SFX.takedown();
+                        spawnParticles(guard.x, guard.y, COLORS.lightGreen, 10);
+                    }
+                });
+                
+            } else if (char.name === 'ANYA') {
+                // Tranq shot
+                const dx = Math.cos(player.angle);
+                const dy = Math.sin(player.angle);
+                projectiles.push({
+                    x: player.x,
+                    y: player.y,
+                    vx: dx * 5,
+                    vy: dy * 5,
+                    type: 'tranq',
+                    life: 60
+                });
+                
+            } else if (char.name === 'OLGA') {
+                // Recon drone - reveal area
+                for (let i = 0; i < 60; i++) {
+                    const angle = (i / 60) * Math.PI * 2;
+                    const dist = 30 + Math.random() * 70;
+                    particles.push({
+                        x: player.x + Math.cos(angle) * dist,
+                        y: player.y + Math.sin(angle) * dist,
+                        vx: 0,
+                        vy: 0,
+                        color: COLORS.gold,
+                        life: 60,
+                        size: 2
+                    });
+                }
+                // Temporarily reveal all guards
+                guards.forEach(g => g.revealed = 120);
+            }
+        }
+        
+        function updateGuards() {
+            guards.forEach(guard => {
+                if (!guard.alive) return;
+                
+                if (guard.stunned) {
+                    guard.stunnedTimer--;
+                    if (guard.stunnedTimer <= 0) {
+                        guard.stunned = false;
+                    }
+                    return;
+                }
+                
+                if (guard.revealed) guard.revealed--;
+                
+                // Check if player is visible
+                const canSee = canGuardSeePlayer(guard);
+                
+                if (canSee) {
+                    if (guard.state !== 'alert' && guard.state !== 'chase') {
+                        guard.state = 'alert';
+                        guard.alertTimer = 60;
+                        if (alertLevel < 1) {
+                            alertLevel = 1;
+                            SFX.caution();
+                        }
+                    }
+                    guard.lastKnownX = player.x;
+                    guard.lastKnownY = player.y;
+                }
+                
+                // State machine
+                if (guard.state === 'patrol') {
+                    if (guard.behavior === 'patrol' && guard.patrol) {
+                        const target = guard.patrol[guard.patrolIndex];
+                        const dist = distance(guard.x, guard.y, target.x, target.y);
+                        
+                        if (dist < 5) {
+                            guard.patrolIndex += guard.patrolDir;
+                            if (guard.patrolIndex >= guard.patrol.length || guard.patrolIndex < 0) {
+                                guard.patrolDir *= -1;
+                                guard.patrolIndex += guard.patrolDir * 2;
+                            }
+                        } else {
+                            const angle = Math.atan2(target.y - guard.y, target.x - guard.x);
+                            guard.x += Math.cos(angle) * guard.speed * 0.5;
+                            guard.y += Math.sin(angle) * guard.speed * 0.5;
+                            guard.angle = angle;
+                        }
+                    }
+                    
+                } else if (guard.state === 'alert') {
+                    guard.alertTimer--;
+                    // Turn towards player
+                    const targetAngle = Math.atan2(player.y - guard.y, player.x - guard.x);
+                    guard.angle = lerpAngle(guard.angle, targetAngle, 0.1);
+                    
+                    if (canSee) {
+                        guard.alertTimer = 60;
+                        if (guard.alertTimer < 30) {
+                            guard.state = 'chase';
+                            alertLevel = 2;
+                            alertTimer = 600;
+                            SFX.alert();
+                        }
+                    }
+                    
+                    if (guard.alertTimer <= 0) {
+                        guard.state = 'search';
+                        guard.searchTimer = 180;
+                    }
+                    
+                } else if (guard.state === 'chase') {
+                    // Move towards player
+                    const angle = Math.atan2(player.y - guard.y, player.x - guard.x);
+                    guard.x += Math.cos(angle) * guard.speed * 1.5;
+                    guard.y += Math.sin(angle) * guard.speed * 1.5;
+                    guard.angle = angle;
+                    
+                    // Attack if close
+                    if (distance(guard.x, guard.y, player.x, player.y) < 20) {
+                        hurtPlayer(15);
+                    }
+                    
+                    if (!canSee) {
+                        guard.state = 'search';
+                        guard.searchTimer = 300;
+                    }
+                    
+                } else if (guard.state === 'search') {
+                    guard.searchTimer--;
+                    
+                    // Move towards last known position
+                    const dist = distance(guard.x, guard.y, guard.lastKnownX, guard.lastKnownY);
+                    if (dist > 10) {
+                        const angle = Math.atan2(guard.lastKnownY - guard.y, guard.lastKnownX - guard.x);
+                        guard.x += Math.cos(angle) * guard.speed * 0.7;
+                        guard.y += Math.sin(angle) * guard.speed * 0.7;
+                        guard.angle = angle;
+                    } else {
+                        // Look around
+                        guard.angle += 0.05;
+                    }
+                    
+                    if (guard.searchTimer <= 0) {
+                        guard.state = 'patrol';
+                        if (alertLevel === 2) {
+                            alertLevel = 3;
+                            alertTimer = 300;
+                        }
+                    }
+                }
+            });
+        }
+        
+        function canGuardSeePlayer(guard) {
+            const dist = distance(guard.x, guard.y, player.x, player.y);
+            if (dist > guard.viewDistance) return false;
+            
+            // Check angle
+            const angleToPlayer = Math.atan2(player.y - guard.y, player.x - guard.x);
+            const angleDiff = Math.abs(normalizeAngle(angleToPlayer - guard.angle));
+            if (angleDiff > guard.viewAngle / 2) return false;
+            
+            // Check line of sight
+            if (!hasLineOfSight(guard.x, guard.y, player.x, player.y)) return false;
+            
+            // Sneaking reduces visibility
+            if (player.sneaking && dist > guard.viewDistance * 0.5) return false;
+            
+            return true;
+        }
+        
+        function updateCameras() {
+            cameras.forEach(cam => {
+                if (cam.disabled) {
+                    cam.disabledTimer--;
+                    if (cam.disabledTimer <= 0) {
+                        cam.disabled = false;
+                    }
+                    return;
+                }
+                
+                // Sweep
+                cam.angle += cam.sweepDir * 0.01;
+                if (cam.sweepRange) {
+                    const baseAngle = cam.baseAngle || (cam.baseAngle = cam.angle);
+                    if (Math.abs(cam.angle - baseAngle) > cam.sweepRange) {
+                        cam.sweepDir *= -1;
+                    }
+                }
+                
+                // Check if player in view
+                const dist = distance(cam.x, cam.y, player.x, player.y);
+                if (dist < cam.range) {
+                    const angleToPlayer = Math.atan2(player.y - cam.y, player.x - cam.x);
+                    const angleDiff = Math.abs(normalizeAngle(angleToPlayer - cam.angle));
+                    
+                    if (angleDiff < cam.fov / 2 && hasLineOfSight(cam.x, cam.y, player.x, player.y)) {
+                        if (!player.sneaking || dist < cam.range * 0.4) {
+                            if (alertLevel < 2) {
+                                alertLevel = 2;
+                                alertTimer = 600;
+                                SFX.alert();
+                                
+                                // Alert nearby guards
+                                guards.forEach(g => {
+                                    if (g.alive && distance(g.x, g.y, cam.x, cam.y) < 150) {
+                                        g.state = 'chase';
+                                        g.lastKnownX = player.x;
+                                        g.lastKnownY = player.y;
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateAlert() {
+            if (alertLevel > 0) {
+                alertTimer--;
+                
+                if (alertTimer <= 0) {
+                    if (alertLevel === 2) {
+                        alertLevel = 3; // Evasion
+                        alertTimer = 300;
+                    } else if (alertLevel === 3) {
+                        alertLevel = 1; // Caution
+                        alertTimer = 180;
+                    } else if (alertLevel === 1) {
+                        alertLevel = 0; // Clear
+                        guards.forEach(g => g.state = 'patrol');
+                    }
+                }
+            }
+        }
+        
+        function updateProjectiles() {
+            projectiles = projectiles.filter(proj => {
+                proj.x += proj.vx;
+                proj.y += proj.vy;
+                proj.life--;
+                
+                if (proj.life <= 0) return false;
+                
+                // Wall collision
+                if (checkWallCollision(proj.x - 2, proj.y - 2, 4, 4)) {
+                    return false;
+                }
+                
+                // Guard collision (tranq)
+                if (proj.type === 'tranq') {
+                    for (let guard of guards) {
+                        if (guard.alive && !guard.stunned && distance(proj.x, proj.y, guard.x, guard.y) < 10) {
+                            guard.stunned = true;
+                            guard.stunnedTimer = 600;
+                            guard.alive = false;
+                            SFX.takedown();
+                            spawnParticles(guard.x, guard.y, COLORS.orange, 8);
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            });
+        }
+        
+        function hurtPlayer(damage) {
+            player.health -= damage;
+            SFX.hurt();
+            spawnParticles(player.x, player.y, COLORS.red, 8);
+            
+            if (player.health <= 0) {
+                gameState = STATE.GAME_OVER;
+                stateTimer = 0;
+                SFX.gameOver();
+            }
+        }
+        
+        function checkWallCollision(x, y, w, h) {
+            // Check walls
+            for (let wall of walls) {
+                if (x < wall.x + wall.w && x + w > wall.x &&
+                    y < wall.y + wall.h && y + h > wall.y) {
+                    return true;
+                }
+            }
+            
+            // Check closed doors
+            for (let door of doors) {
+                if (!door.open) {
+                    if (x < door.x + door.w && x + w > door.x &&
+                        y < door.y + door.h && y + h > door.y) {
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        function hasLineOfSight(x1, y1, x2, y2) {
+            const steps = Math.ceil(distance(x1, y1, x2, y2) / 5);
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = x1 + (x2 - x1) * t;
+                const y = y1 + (y2 - y1) * t;
+                if (checkWallCollision(x - 1, y - 1, 2, 2)) return false;
+            }
+            return true;
+        }
+        
+        function spawnParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: (Math.random() - 0.5) * 3,
+                    color,
+                    life: 30 + Math.random() * 20,
+                    size: 2 + Math.random() * 2
+                });
+            }
+        }
+        
+        function updateParticles() {
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.95;
+                p.vy *= 0.95;
+                p.life--;
+                return p.life > 0;
+            });
+        }
+        
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+        
+        function normalizeAngle(a) {
+            while (a > Math.PI) a -= Math.PI * 2;
+            while (a < -Math.PI) a += Math.PI * 2;
+            return a;
+        }
+        
+        function lerpAngle(a, b, t) {
+            const diff = normalizeAngle(b - a);
+            return a + diff * t;
+        }
+        
+        // Rendering
+        function render() {
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.scale(SCALE, SCALE);
+            ctx.imageSmoothingEnabled = false;
+            
+            switch (gameState) {
+                case STATE.TITLE:
+                    renderTitle();
+                    break;
+                case STATE.SELECT:
+                    renderSelect();
+                    break;
+                case STATE.CODEC:
+                    if (currentCutscene) {
+                        renderGameplay();
+                    }
+                    renderCodec();
+                    break;
+                case STATE.PLAYING:
+                case STATE.ALERT:
+                case STATE.BOSS:
+                    renderGameplay();
+                    renderHUD();
+                    break;
+                case STATE.PAUSE:
+                    renderGameplay();
+                    renderHUD();
+                    renderPause();
+                    break;
+                case STATE.GAME_OVER:
+                    renderGameOver();
+                    break;
+                case STATE.VICTORY:
+                    renderVictory();
+                    break;
+            }
+            
+            ctx.restore();
+        }
+        
+        function renderTitle() {
+            // Background with scan effect
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Scan line effect
+            const scanY = (globalTimer * 2) % NATIVE_HEIGHT;
+            ctx.fillStyle = COLORS.green;
+            ctx.globalAlpha = 0.1;
+            ctx.fillRect(0, scanY, NATIVE_WIDTH, 2);
+            ctx.globalAlpha = 1;
+            
+            // Grid pattern
+            ctx.strokeStyle = COLORS.darkGreen;
+            ctx.lineWidth = 0.5;
+            for (let x = 0; x < NATIVE_WIDTH; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, NATIVE_HEIGHT);
+                ctx.stroke();
+            }
+            for (let y = 0; y < NATIVE_HEIGHT; y += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(NATIVE_WIDTH, y);
+                ctx.stroke();
+            }
+            
+            // Logo
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(40, 50, 240, 50);
+            
+            ctx.fillStyle = COLORS.green;
+            ctx.font = '24px "Orbitron", sans-serif';
+            ctx.fillText('THE SPARROWS', 55, 82);
+            
+            ctx.fillStyle = COLORS.gold;
+            ctx.font = '12px "Orbitron", sans-serif';
+            ctx.fillText('SEASON 4', 120, 110);
+            
+            ctx.fillStyle = COLORS.red;
+            ctx.font = '10px "Share Tech Mono", monospace';
+            ctx.fillText('BONDS TESTED', 115, 130);
+            
+            // Subtitle
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '8px "Share Tech Mono", monospace';
+            ctx.fillText('TACTICAL ESPIONAGE ACTION', 95, 150);
+            
+            // Press start
+            if (Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.green;
+                ctx.fillText('PRESS START', 125, 200);
+            }
+            
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.font = '6px "Share Tech Mono", monospace';
+            ctx.fillText('2025 ZUUP INNOVATION LAB', 105, 230);
+        }
+        
+        function renderSelect() {
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Header
+            ctx.fillStyle = COLORS.green;
+            ctx.font = '10px "Orbitron", sans-serif';
+            ctx.fillText('SELECT OPERATIVE', 95, 25);
+            
+            // Character cards
+            CHARACTERS.forEach((char, i) => {
+                const x = 20 + i * 75;
+                const y = 45;
+                const selected = i === player.charIndex;
+                
+                // Card bg
+                ctx.fillStyle = selected ? char.darkColor : COLORS.black;
+                ctx.fillRect(x, y, 65, 130);
+                
+                if (selected) {
+                    ctx.strokeStyle = char.color;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, 65, 130);
+                }
+                
+                // Avatar area
+                ctx.fillStyle = char.color;
+                ctx.globalAlpha = 0.3;
+                ctx.fillRect(x + 5, y + 5, 55, 50);
+                ctx.globalAlpha = 1;
+                
+                // Silhouette
+                ctx.fillStyle = char.color;
+                ctx.fillRect(x + 22, y + 15, 20, 35);
+                ctx.fillRect(x + 25, y + 8, 14, 14);
+                
+                // Info
+                ctx.fillStyle = COLORS.white;
+                ctx.font = '6px "Share Tech Mono", monospace';
+                ctx.fillText(char.codename, x + 8, y + 68);
+                
+                ctx.fillStyle = char.color;
+                ctx.font = '5px "Share Tech Mono", monospace';
+                ctx.fillText(char.name, x + 8, y + 78);
+                
+                // Stats
+                ctx.fillStyle = COLORS.gray;
+                ctx.fillText('STL', x + 5, y + 95);
+                ctx.fillText('CMB', x + 5, y + 105);
+                ctx.fillText('TCH', x + 5, y + 115);
+                
+                // Stat bars
+                renderStatBar(x + 25, y + 90, char.stealth, COLORS.cyan);
+                renderStatBar(x + 25, y + 100, char.combat, COLORS.red);
+                renderStatBar(x + 25, y + 110, char.tech, COLORS.gold);
+            });
+            
+            // Selected info
+            const char = CHARACTERS[player.charIndex];
+            ctx.fillStyle = char.color;
+            ctx.font = '8px "Share Tech Mono", monospace';
+            ctx.fillText('GADGET: ' + char.gadget, 20, 190);
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '6px "Share Tech Mono", monospace';
+            ctx.fillText(char.gadgetDesc, 20, 202);
+            
+            if (Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.green;
+                ctx.fillText('PRESS START TO BEGIN', 100, 225);
+            }
+        }
+        
+        function renderStatBar(x, y, value, color) {
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.fillRect(x, y, 35, 5);
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, (value / 10) * 35, 5);
+        }
+        
+        function renderGameplay() {
+            // Background
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            ctx.save();
+            ctx.translate(-Math.floor(cameraX), -Math.floor(cameraY));
+            
+            // Floor grid
+            ctx.strokeStyle = COLORS.gray;
+            ctx.globalAlpha = 0.2;
+            ctx.lineWidth = 0.5;
+            for (let x = 0; x < mission.width; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mission.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < mission.height; y += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mission.width, y);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            
+            // Walls
+            walls.forEach(wall => {
+                ctx.fillStyle = COLORS.concrete;
+                ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+                // 3D effect
+                ctx.fillStyle = COLORS.lightGray;
+                ctx.fillRect(wall.x, wall.y, wall.w, 2);
+                ctx.fillStyle = COLORS.black;
+                ctx.fillRect(wall.x, wall.y + wall.h - 2, wall.w, 2);
+            });
+            
+            // Doors
+            doors.forEach(door => {
+                if (door.open) {
+                    ctx.fillStyle = COLORS.darkGreen;
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillRect(door.x, door.y, door.w, door.h);
+                    ctx.globalAlpha = 1;
+                } else {
+                    ctx.fillStyle = door.keycard ? COLORS.rust : COLORS.metal;
+                    ctx.fillRect(door.x, door.y, door.w, door.h);
+                    if (door.keycard) {
+                        ctx.fillStyle = COLORS.red;
+                        ctx.fillRect(door.x + door.w/2 - 2, door.y + door.h/2 - 2, 4, 4);
+                    }
+                }
+            });
+            
+            // Terminals
+            terminals.forEach(term => {
+                ctx.fillStyle = term.hacked ? COLORS.darkGreen : COLORS.darkBlue;
+                ctx.fillRect(term.x, term.y, term.w, term.h);
+                ctx.fillStyle = term.hacked ? COLORS.green : COLORS.blue;
+                ctx.fillRect(term.x + 2, term.y + 2, term.w - 4, term.h - 6);
+                // Screen glow
+                if (!term.hacked && Math.floor(globalTimer / 10) % 2 === 0) {
+                    ctx.fillStyle = COLORS.cyan;
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillRect(term.x - 2, term.y - 2, term.w + 4, term.h + 4);
+                    ctx.globalAlpha = 1;
+                }
+            });
+            
+            // Items
+            items.forEach(item => {
+                if (item.collected) return;
+                
+                const bounce = Math.sin(globalTimer * 0.1) * 2;
+                ctx.fillStyle = item.type === 'health' ? COLORS.green :
+                               item.type === 'ammo' ? COLORS.orange : COLORS.gold;
+                ctx.fillRect(item.x - 5, item.y - 5 + bounce, 10, 10);
+                
+                // Icon
+                ctx.fillStyle = COLORS.white;
+                if (item.type === 'health') {
+                    ctx.fillRect(item.x - 1, item.y - 3 + bounce, 2, 6);
+                    ctx.fillRect(item.x - 3, item.y - 1 + bounce, 6, 2);
+                } else if (item.type === 'keycard') {
+                    ctx.fillRect(item.x - 3, item.y - 2 + bounce, 6, 4);
+                }
+            });
+            
+            // Camera vision cones
+            cameras.forEach(cam => {
+                if (cam.disabled) {
+                    ctx.fillStyle = COLORS.gray;
+                    ctx.globalAlpha = 0.2;
+                } else {
+                    ctx.fillStyle = alertLevel >= 2 ? COLORS.red : COLORS.yellow;
+                    ctx.globalAlpha = 0.15;
+                }
+                
+                ctx.beginPath();
+                ctx.moveTo(cam.x, cam.y);
+                ctx.arc(cam.x, cam.y, cam.range, cam.angle - cam.fov/2, cam.angle + cam.fov/2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                
+                // Camera body
+                ctx.fillStyle = cam.disabled ? COLORS.gray : COLORS.red;
+                ctx.fillRect(cam.x - 4, cam.y - 4, 8, 8);
+            });
+            
+            // Guard vision cones
+            guards.forEach(guard => {
+                if (!guard.alive || guard.stunned) return;
+                
+                ctx.fillStyle = guard.state === 'chase' ? COLORS.red :
+                               guard.state === 'alert' ? COLORS.orange : COLORS.yellow;
+                ctx.globalAlpha = 0.1;
+                
+                ctx.beginPath();
+                ctx.moveTo(guard.x, guard.y);
+                ctx.arc(guard.x, guard.y, guard.viewDistance, 
+                       guard.angle - guard.viewAngle/2, guard.angle + guard.viewAngle/2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+            
+            // Guards
+            guards.forEach(guard => {
+                if (guard.stunned && !guard.alive) {
+                    ctx.fillStyle = COLORS.gray;
+                    ctx.fillRect(guard.x - 6, guard.y - 3, 12, 6);
+                    return;
+                }
+                if (!guard.alive) return;
+                
+                const flash = guard.state === 'alert' && Math.floor(globalTimer / 5) % 2 === 0;
+                
+                // Body
+                ctx.fillStyle = flash ? COLORS.orange : (guard.state === 'chase' ? COLORS.red : COLORS.rust);
+                ctx.fillRect(guard.x - 6, guard.y - 6, 12, 12);
+                
+                // Direction indicator
+                const dx = Math.cos(guard.angle) * 8;
+                const dy = Math.sin(guard.angle) * 8;
+                ctx.strokeStyle = COLORS.white;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(guard.x, guard.y);
+                ctx.lineTo(guard.x + dx, guard.y + dy);
+                ctx.stroke();
+                
+                // Alert indicator
+                if (guard.state === 'alert') {
+                    ctx.fillStyle = COLORS.yellow;
+                    ctx.font = '8px "Share Tech Mono", monospace';
+                    ctx.fillText('?', guard.x - 3, guard.y - 12);
+                } else if (guard.state === 'chase') {
+                    ctx.fillStyle = COLORS.red;
+                    ctx.font = '8px "Share Tech Mono", monospace';
+                    ctx.fillText('!', guard.x - 2, guard.y - 12);
+                }
+            });
+            
+            // Player
+            const char = CHARACTERS[player.charIndex];
+            const visible = !player.invincible || Math.floor(globalTimer / 3) % 2 === 0;
+            
+            if (visible) {
+                // Shadow
+                ctx.fillStyle = COLORS.shadow;
+                ctx.beginPath();
+                ctx.ellipse(player.x, player.y + 2, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Body
+                ctx.fillStyle = player.sneaking ? char.darkColor : char.color;
+                ctx.fillRect(player.x - 6, player.y - 6, 12, 12);
+                
+                // Direction
+                const dx = Math.cos(player.angle) * 8;
+                const dy = Math.sin(player.angle) * 8;
+                ctx.strokeStyle = COLORS.white;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(player.x + dx, player.y + dy);
+                ctx.stroke();
+            }
+            
+            // Projectiles
+            projectiles.forEach(proj => {
+                ctx.fillStyle = COLORS.orange;
+                ctx.fillRect(proj.x - 2, proj.y - 2, 4, 4);
+            });
+            
+            // Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 50;
+                ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+            });
+            ctx.globalAlpha = 1;
+            
+            // Triggers (debug - comment out for release)
+            /*
+            triggers.forEach(t => {
+                ctx.strokeStyle = t.triggered ? COLORS.green : COLORS.yellow;
+                ctx.globalAlpha = 0.3;
+                ctx.strokeRect(t.x, t.y, t.w, t.h);
+                ctx.globalAlpha = 1;
+            });
+            */
+            
+            ctx.restore();
+        }
+        
+        function renderHUD() {
+            // Alert bar
+            if (alertLevel > 0) {
+                const alertColors = [COLORS.green, COLORS.yellow, COLORS.red, COLORS.orange];
+                const alertTexts = ['', 'CAUTION', 'ALERT', 'EVASION'];
+                
+                ctx.fillStyle = COLORS.black;
+                ctx.globalAlpha = 0.7;
+                ctx.fillRect(NATIVE_WIDTH/2 - 40, 5, 80, 16);
+                ctx.globalAlpha = 1;
+                
+                ctx.fillStyle = alertColors[alertLevel];
+                ctx.font = '8px "Orbitron", sans-serif';
+                ctx.fillText(alertTexts[alertLevel], NATIVE_WIDTH/2 - 25, 16);
+                
+                // Flashing effect
+                if (alertLevel >= 2 && Math.floor(globalTimer / 10) % 2 === 0) {
+                    ctx.fillStyle = alertColors[alertLevel];
+                    ctx.globalAlpha = 0.1;
+                    ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+                    ctx.globalAlpha = 1;
+                }
+            }
+            
+            // Health
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.7;
+            ctx.fillRect(5, 5, 70, 20);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '6px "Share Tech Mono", monospace';
+            ctx.fillText('LIFE', 8, 13);
+            
+            ctx.fillStyle = COLORS.darkRed;
+            ctx.fillRect(8, 16, 60, 6);
+            ctx.fillStyle = COLORS.green;
+            ctx.fillRect(8, 16, 60 * (player.health / player.maxHealth), 6);
+            
+            // Gadget ammo
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.7;
+            ctx.fillRect(5, 28, 70, 14);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.gray;
+            ctx.fillText('GADGET', 8, 38);
+            
+            const char = CHARACTERS[player.charIndex];
+            for (let i = 0; i < player.maxGadgetAmmo; i++) {
+                ctx.fillStyle = i < player.gadgetAmmo ? char.color : COLORS.darkGray;
+                ctx.fillRect(45 + i * 8, 32, 6, 6);
+            }
+            
+            // Radar
+            renderRadar();
+            
+            // Objectives
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.7;
+            ctx.fillRect(NATIVE_WIDTH - 105, 5, 100, 12 + objectives.length * 10);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.gold;
+            ctx.font = '6px "Share Tech Mono", monospace';
+            ctx.fillText('OBJECTIVES', NATIVE_WIDTH - 100, 13);
+            
+            objectives.forEach((obj, i) => {
+                const complete = i < objectivesComplete || triggers[i]?.triggered;
+                ctx.fillStyle = complete ? COLORS.green : COLORS.gray;
+                ctx.fillText((complete ? '[X] ' : '[ ] ') + obj.substring(0, 14), NATIVE_WIDTH - 100, 24 + i * 10);
+            });
+            
+            // Mission name
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '6px "Share Tech Mono", monospace';
+            ctx.fillText(mission.name, 5, NATIVE_HEIGHT - 5);
+        }
+        
+        function renderRadar() {
+            const radarX = NATIVE_WIDTH - RADAR_SIZE - 10;
+            const radarY = NATIVE_HEIGHT - RADAR_SIZE - 10;
+            
+            // Background
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(radarX - 5, radarY - 5, RADAR_SIZE + 10, RADAR_SIZE + 10);
+            ctx.globalAlpha = 1;
+            
+            // Radar circle
+            ctx.strokeStyle = COLORS.green;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(radarX + RADAR_SIZE/2, radarY + RADAR_SIZE/2, RADAR_SIZE/2, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Grid
+            ctx.strokeStyle = COLORS.darkGreen;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(radarX, radarY + RADAR_SIZE/2);
+            ctx.lineTo(radarX + RADAR_SIZE, radarY + RADAR_SIZE/2);
+            ctx.moveTo(radarX + RADAR_SIZE/2, radarY);
+            ctx.lineTo(radarX + RADAR_SIZE/2, radarY + RADAR_SIZE);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            
+            // Sweep line
+            const sweepAngle = globalTimer * 0.05;
+            ctx.strokeStyle = COLORS.green;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(radarX + RADAR_SIZE/2, radarY + RADAR_SIZE/2);
+            ctx.lineTo(
+                radarX + RADAR_SIZE/2 + Math.cos(sweepAngle) * RADAR_SIZE/2,
+                radarY + RADAR_SIZE/2 + Math.sin(sweepAngle) * RADAR_SIZE/2
+            );
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            
+            // Player (center)
+            ctx.fillStyle = COLORS.cyan;
+            ctx.fillRect(radarX + RADAR_SIZE/2 - 2, radarY + RADAR_SIZE/2 - 2, 4, 4);
+            
+            // Enemies
+            guards.forEach(guard => {
+                if (!guard.alive) return;
+                
+                const dx = (guard.x - player.x) / RADAR_RANGE * (RADAR_SIZE/2);
+                const dy = (guard.y - player.y) / RADAR_RANGE * (RADAR_SIZE/2);
+                
+                if (Math.abs(dx) < RADAR_SIZE/2 && Math.abs(dy) < RADAR_SIZE/2) {
+                    ctx.fillStyle = guard.state === 'chase' ? COLORS.red :
+                                   guard.state === 'alert' ? COLORS.orange : COLORS.yellow;
+                    ctx.fillRect(radarX + RADAR_SIZE/2 + dx - 2, radarY + RADAR_SIZE/2 + dy - 2, 4, 4);
+                }
+            });
+            
+            // Objectives
+            triggers.forEach(t => {
+                if (t.triggered) return;
+                
+                const dx = (t.x + t.w/2 - player.x) / RADAR_RANGE * (RADAR_SIZE/2);
+                const dy = (t.y + t.h/2 - player.y) / RADAR_RANGE * (RADAR_SIZE/2);
+                
+                if (Math.abs(dx) < RADAR_SIZE/2 && Math.abs(dy) < RADAR_SIZE/2) {
+                    ctx.fillStyle = COLORS.gold;
+                    if (Math.floor(globalTimer / 15) % 2 === 0) {
+                        ctx.fillRect(radarX + RADAR_SIZE/2 + dx - 2, radarY + RADAR_SIZE/2 + dy - 2, 4, 4);
+                    }
+                }
+            });
+        }
+        
+        function renderCodec() {
+            // Codec overlay
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.85;
+            ctx.fillRect(20, 60, NATIVE_WIDTH - 40, 120);
+            ctx.globalAlpha = 1;
+            
+            // Border
+            ctx.strokeStyle = COLORS.green;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(20, 60, NATIVE_WIDTH - 40, 120);
+            
+            // Frequency display
+            if (codecMessages && codecMessages[codecIndex]) {
+                const msg = codecMessages[codecIndex];
+                
+                ctx.fillStyle = COLORS.green;
+                ctx.font = '8px "Orbitron", sans-serif';
+                ctx.fillText('CODEC', 30, 75);
+                
+                ctx.fillStyle = COLORS.cyan;
+                ctx.font = '10px "Share Tech Mono", monospace';
+                ctx.fillText(msg.freq || '141.12', 75, 75);
+                
+                // Speaker portrait area
+                ctx.fillStyle = COLORS.darkGreen;
+                ctx.fillRect(30, 85, 60, 60);
+                
+                // Portrait color based on speaker
+                let portraitColor = COLORS.gray;
+                if (msg.speaker === 'NATASHA' || msg.speaker === 'PLAYER') portraitColor = COLORS.cyan;
+                else if (msg.speaker === 'MARIA') portraitColor = COLORS.green;
+                else if (msg.speaker === 'ANYA') portraitColor = COLORS.orange;
+                else if (msg.speaker === 'OLGA') portraitColor = COLORS.gold;
+                else if (msg.speaker === 'COMMANDER') portraitColor = COLORS.red;
+                else if (msg.speaker === 'BETRAYER' || msg.speaker === '???') portraitColor = COLORS.darkRed;
+                
+                ctx.fillStyle = portraitColor;
+                ctx.globalAlpha = 0.5;
+                ctx.fillRect(35, 90, 50, 50);
+                ctx.globalAlpha = 1;
+                
+                // Silhouette
+                ctx.fillStyle = portraitColor;
+                ctx.fillRect(48, 100, 24, 32);
+                ctx.fillRect(52, 92, 16, 16);
+                
+                // Speaker name
+                ctx.fillStyle = portraitColor;
+                ctx.font = '8px "Share Tech Mono", monospace';
+                ctx.fillText(msg.speaker, 100, 95);
+                
+                // Message text
+                ctx.fillStyle = COLORS.white;
+                ctx.font = '7px "Share Tech Mono", monospace';
+                
+                // Word wrap
+                const maxWidth = 160;
+                const words = codecText.split(' ');
+                let line = '';
+                let y = 110;
+                
+                words.forEach(word => {
+                    const testLine = line + word + ' ';
+                    if (ctx.measureText(testLine).width > maxWidth) {
+                        ctx.fillText(line, 100, y);
+                        line = word + ' ';
+                        y += 12;
+                    } else {
+                        line = testLine;
+                    }
+                });
+                ctx.fillText(line, 100, y);
+            }
+            
+            // Continue indicator
+            if (codecMessages && codecCharIndex >= (codecMessages[codecIndex]?.text.length || 0)) {
+                if (Math.floor(globalTimer / 20) % 2 === 0) {
+                    ctx.fillStyle = COLORS.green;
+                    ctx.fillText('▼', NATIVE_WIDTH - 40, 170);
+                }
+            }
+            
+            // Static effect
+            ctx.fillStyle = COLORS.green;
+            ctx.globalAlpha = 0.03;
+            for (let i = 0; i < 50; i++) {
+                const x = 20 + Math.random() * (NATIVE_WIDTH - 40);
+                const y = 60 + Math.random() * 120;
+                ctx.fillRect(x, y, 2, 1);
+            }
+            ctx.globalAlpha = 1;
+        }
+        
+        function renderPause() {
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.green;
+            ctx.font = '16px "Orbitron", sans-serif';
+            ctx.fillText('PAUSED', 125, 110);
+            
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '8px "Share Tech Mono", monospace';
+            ctx.fillText('PRESS ESC TO CONTINUE', 95, 140);
+        }
+        
+        function renderGameOver() {
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Scan lines
+            ctx.strokeStyle = COLORS.red;
+            ctx.globalAlpha = 0.1;
+            for (let y = 0; y < NATIVE_HEIGHT; y += 4) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(NATIVE_WIDTH, y);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.red;
+            ctx.font = '20px "Orbitron", sans-serif';
+            ctx.fillText('MISSION FAILED', 75, 100);
+            
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '8px "Share Tech Mono", monospace';
+            ctx.fillText('THE ENEMY HAS WON THIS ROUND', 75, 130);
+            
+            if (stateTimer > 180 && Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.white;
+                ctx.fillText('PRESS START TO CONTINUE', 85, 180);
+            }
+        }
+        
+        function renderVictory() {
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Scan effect
+            const scanY = (globalTimer * 2) % NATIVE_HEIGHT;
+            ctx.fillStyle = COLORS.green;
+            ctx.globalAlpha = 0.1;
+            ctx.fillRect(0, scanY, NATIVE_WIDTH, 2);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.gold;
+            ctx.font = '16px "Orbitron", sans-serif';
+            ctx.fillText('MISSION COMPLETE', 65, 60);
+            
+            ctx.fillStyle = COLORS.white;
+            ctx.font = '8px "Share Tech Mono", monospace';
+            ctx.fillText('THE TRUTH HAS BEEN REVEALED', 75, 90);
+            ctx.fillText('BUT AT WHAT COST?', 105, 105);
+            
+            // Characters
+            ctx.fillStyle = COLORS.cyan;
+            ctx.fillRect(60, 130, 15, 15);
+            ctx.fillStyle = COLORS.green;
+            ctx.fillRect(100, 130, 15, 15);
+            ctx.fillStyle = COLORS.orange;
+            ctx.fillRect(140, 130, 15, 15);
+            ctx.fillStyle = COLORS.gold;
+            ctx.fillRect(180, 130, 15, 15);
+            // One darkened (the betrayer)
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.7;
+            ctx.fillRect(220, 130, 15, 15);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.gray;
+            ctx.fillText('THE SPARROWS WILL RETURN', 80, 170);
+            ctx.fillStyle = COLORS.cyan;
+            ctx.fillText('SEASON 5: REVELATIONS', 90, 190);
+            
+            if (stateTimer > 200 && Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.green;
+                ctx.fillText('PRESS START', 125, 220);
+            }
+        }
+        
+        // Game loop
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        gameLoop();
+    </script>
+</body>
+</html>

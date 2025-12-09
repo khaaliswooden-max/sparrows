@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE SPARROWS - Season 6: Shadows Rising</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;600;700&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        
+        .game-frame {
+            position: relative;
+            background: #000;
+            border-radius: 4px;
+            box-shadow: 0 0 80px rgba(255, 100, 50, 0.15), 0 0 40px rgba(0, 150, 255, 0.1);
+        }
+        
+        #gameCanvas { display: block; border-radius: 2px; }
+        
+        .controls-hud {
+            margin-top: 15px;
+            display: flex;
+            gap: 20px;
+            color: #aaa;
+            font-size: 11px;
+        }
+        
+        .controls-hud span { color: #ff6633; font-weight: 600; }
+        
+        .era-marker {
+            position: absolute;
+            top: -22px;
+            right: 12px;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 12px;
+            color: #ff6633;
+            letter-spacing: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-frame">
+        <div class="era-marker">HD ERA</div>
+        <canvas id="gameCanvas" width="1280" height="720"></canvas>
+    </div>
+    <div class="controls-hud">
+        <div><span>WASD</span> MOVE</div>
+        <div><span>SPACE</span> COVER/VAULT</div>
+        <div><span>CLICK</span> FIRE</div>
+        <div><span>R</span> RELOAD</div>
+        <div><span>Q</span> ABILITY</div>
+        <div><span>1-4</span> SQUAD</div>
+        <div><span>TAB</span> OBJECTIVES</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const NATIVE_WIDTH = 640;
+        const NATIVE_HEIGHT = 360;
+        const SCALE = 2;
+        
+        canvas.width = NATIVE_WIDTH * SCALE;
+        canvas.height = NATIVE_HEIGHT * SCALE;
+        
+        const COLORS = {
+            black: '#0a0a0c', nearBlack: '#141418', darkGray: '#1e2028', gray: '#3a3e4a',
+            lightGray: '#8a8e9a', white: '#f0f2f5',
+            primary: '#ff6633', primaryDark: '#cc4422', primaryLight: '#ff8855',
+            secondary: '#00aaff', secondaryDark: '#0077cc',
+            natasha: '#00ddff', maria: '#44ff88', anya: '#ff8844', olga: '#ffcc00',
+            health: '#44dd66', healthLow: '#ff4444', shield: '#4488ff', ammo: '#ffaa22',
+            cover: '#2a3040', ground: '#1a1e28', metal: '#4a5060',
+            muzzleFlash: '#ffdd88', blood: '#881122'
+        };
+        
+        const STATE = { TITLE: 0, SELECT: 1, CUTSCENE: 2, PLAYING: 3, PAUSED: 4, OBJECTIVES: 5, GAME_OVER: 6, VICTORY: 7 };
+        
+        let gameState = STATE.TITLE;
+        let stateTimer = 0;
+        let globalTimer = 0;
+        
+        const CHARACTERS = [
+            { id: 'natasha', name: 'NATASHA', codename: 'CIPHER', role: 'TECH', color: COLORS.natasha, weapon: 'SMG', ability: 'EMP BURST', stats: { health: 90, damage: 8, fireRate: 5 } },
+            { id: 'maria', name: 'MARIA', codename: 'VENOM', role: 'ASSAULT', color: COLORS.maria, weapon: 'RIFLE', ability: 'FURY MODE', stats: { health: 120, damage: 12, fireRate: 3 } },
+            { id: 'anya', name: 'ANYA', codename: 'HAWK', role: 'MARKSMAN', color: COLORS.anya, weapon: 'SNIPER', ability: 'DEAD EYE', stats: { health: 80, damage: 35, fireRate: 1 } },
+            { id: 'olga', name: 'OLGA', codename: 'ORACLE', role: 'SUPPORT', color: COLORS.olga, weapon: 'PISTOL', ability: 'TACTICAL SCAN', stats: { health: 85, damage: 10, fireRate: 2 } }
+        ];
+        
+        let player = {
+            x: 100, y: 280, vx: 0, vy: 0, width: 24, height: 32, charIndex: 0,
+            health: 100, maxHealth: 100, shield: 50, maxShield: 50, shieldDelay: 0,
+            ammo: 30, maxAmmo: 30, reserve: 120,
+            ability: 100, maxAbility: 100, abilityActive: false, abilityTimer: 0,
+            inCover: false, coverObj: null, firing: false, reloading: false, reloadTimer: 0,
+            facingRight: true, animFrame: 0, animTimer: 0, invincible: false, invTimer: 0
+        };
+        
+        let squad = [];
+        let squadCmd = 0;
+        const CMDS = ['FOLLOW', 'HOLD', 'ATTACK', 'REGROUP'];
+        
+        const MISSIONS = [
+            { name: 'GHOST SIGNAL', location: 'SIBERIA', briefing: 'Investigate the Mockingbird signal.', width: 1200, height: 380, waves: 3, objectives: ['INVESTIGATE SIGNAL', 'ELIMINATE HOSTILES', 'RETRIEVE INTEL', 'EXTRACT'] },
+            { name: 'BROKEN CHAINS', location: 'BALKANS', briefing: 'Strike the Shadow Collective outpost.', width: 1400, height: 400, waves: 4, objectives: ['INFILTRATE COMPOUND', 'LOCATE LEADERSHIP', 'DISABLE COMMS', 'CAPTURE VEX'] },
+            { name: 'ENDGAME', location: 'CLASSIFIED', briefing: 'Stop the Shadow Protocol.', width: 1600, height: 420, waves: 5, objectives: ['BREACH FACILITY', 'FIGHT THROUGH', 'REACH COMMAND', 'STOP PROTOCOL'], isFinal: true }
+        ];
+        
+        let currentMission = 0, mission = null, objComplete = [], wave = 0, waveActive = false;
+        let walls = [], covers = [], enemies = [], projectiles = [], particles = [], pickups = [], triggers = [], explosions = [];
+        let camX = 0, camY = 0, camShake = 0;
+        
+        let cutsceneQueue = [], currentLine = null, lineText = '', lineChar = 0, lineTimer = 0;
+        
+        const DIALOGUES = {
+            intro: [
+                { speaker: 'SYSTEM', text: 'THREE YEARS AFTER THE FALL OF THE DIRECTORATE...' },
+                { speaker: 'NATASHA', text: 'We were supposed to be free. Then the signal came.' },
+                { speaker: 'MARIA', text: 'Former Mockingbird assets. The Shadow Collective.' },
+                { speaker: 'ANYA', text: 'They want to finish what Mockingbird started.' },
+                { speaker: 'OLGA', text: 'Then we stop them. One last mission.' },
+                { speaker: 'NATASHA', text: 'Together.' }
+            ],
+            victory: [
+                { speaker: 'SYSTEM', text: 'SHADOW PROTOCOL: NEUTRALIZED' },
+                { speaker: 'NATASHA', text: 'It\'s done. Mockingbird is truly dead.' },
+                { speaker: 'MARIA', text: 'Both versions.' },
+                { speaker: 'OLGA', text: 'We\'ll always be Sparrows. The world will always need us.' },
+                { speaker: 'SYSTEM', text: 'THE SPARROWS VANISHED INTO LEGEND...' },
+                { speaker: 'SYSTEM', text: 'BUT THEY\'RE STILL OUT THERE. WATCHING. PROTECTING.' }
+            ]
+        };
+        
+        const keys = {}, keyJust = {};
+        let prevKeys = {}, mouseX = 0, mouseY = 0, mouseDown = false;
+        
+        document.addEventListener('keydown', e => { keys[e.code] = true; if (['Space','Tab','KeyR','KeyQ'].includes(e.code)) e.preventDefault(); });
+        document.addEventListener('keyup', e => { keys[e.code] = false; });
+        canvas.addEventListener('mousemove', e => { const r = canvas.getBoundingClientRect(); mouseX = (e.clientX - r.left) / SCALE; mouseY = (e.clientY - r.top) / SCALE; });
+        canvas.addEventListener('mousedown', e => { mouseDown = true; e.preventDefault(); });
+        canvas.addEventListener('mouseup', () => { mouseDown = false; });
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+        
+        function updateInput() { for (let k in keys) { keyJust[k] = keys[k] && !prevKeys[k]; } prevKeys = { ...keys }; }
+        
+        let audioCtx = null;
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        function playSound(f, d, t = 'sine', v = 0.08) {
+            if (!audioCtx) return;
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = t; o.frequency.value = f;
+            g.gain.setValueAtTime(v, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + d);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
+        }
+        
+        const SFX = {
+            gun: () => { playSound(150, 0.08, 'sawtooth', 0.12); playSound(80, 0.1, 'square', 0.08); },
+            hit: () => playSound(200, 0.1, 'sawtooth', 0.1),
+            reload: () => { playSound(300, 0.1, 'square', 0.08); playSound(500, 0.1, 'sine', 0.08); },
+            pickup: () => { playSound(600, 0.1, 'sine', 0.1); playSound(800, 0.12, 'sine', 0.08); },
+            ability: () => [500,700,900].forEach((f,i) => setTimeout(() => playSound(f, 0.15, 'sine', 0.1), i*50)),
+            objective: () => [523,659,784,1047].forEach((f,i) => setTimeout(() => playSound(f, 0.2, 'sine', 0.1), i*120)),
+            select: () => playSound(400, 0.08, 'sine', 0.06),
+            confirm: () => { playSound(500, 0.1, 'sine', 0.08); playSound(700, 0.12, 'sine', 0.06); },
+            victory: () => [523,659,784,1047,1319].forEach((f,i) => setTimeout(() => playSound(f, 0.3, 'sine', 0.12), i*150)),
+            gameOver: () => [400,350,300,250].forEach((f,i) => setTimeout(() => playSound(f, 0.3, 'sine', 0.1), i*180)),
+            dialogue: () => playSound(800, 0.03, 'sine', 0.04)
+        };
+        
+        function startMission(idx) {
+            initAudio();
+            currentMission = idx; mission = MISSIONS[idx];
+            objComplete = new Array(mission.objectives.length).fill(false);
+            wave = 0; waveActive = false;
+            walls = []; covers = []; enemies = []; projectiles = []; particles = []; pickups = []; triggers = []; explosions = [];
+            
+            const char = CHARACTERS[player.charIndex];
+            player.x = 80; player.y = mission.height - 70;
+            player.health = char.stats.health; player.maxHealth = char.stats.health;
+            player.shield = player.maxShield; player.ammo = player.maxAmmo; player.ability = player.maxAbility;
+            player.inCover = false; player.reloading = false; player.abilityActive = false;
+            
+            setupSquad();
+            generateLevel(idx);
+            camX = 0; camY = 0;
+            startCutscene(idx === 0 ? DIALOGUES.intro : [{ speaker: 'SYSTEM', text: 'MISSION ' + (idx+1) + ': ' + mission.name }]);
+        }
+        
+        function setupSquad() {
+            squad = [];
+            CHARACTERS.forEach((c, i) => {
+                if (i !== player.charIndex) {
+                    squad.push({ char: c, x: player.x - 40 - i * 25, y: player.y, health: c.stats.health, maxHealth: c.stats.health, state: 'follow', target: null, cd: 0, alive: true });
+                }
+            });
+        }
+        
+        function generateLevel(idx) {
+            walls.push({ x: 0, y: mission.height - 20, w: mission.width, h: 40 });
+            
+            const spacing = 150;
+            for (let i = 1; i < mission.width / spacing; i++) {
+                const x = i * spacing + (Math.random() - 0.5) * 40;
+                const w = 40 + Math.random() * 30;
+                const h = 35 + Math.random() * 20;
+                covers.push({ x, y: mission.height - 20 - h, w, h, hp: 100, destruct: Math.random() > 0.5 });
+            }
+            
+            const tSpacing = mission.width / (mission.objectives.length + 1);
+            for (let i = 0; i < mission.objectives.length; i++) {
+                triggers.push({ x: (i+1) * tSpacing, y: mission.height - 100, w: 60, h: 80, obj: i, done: false, needWave: i < mission.waves });
+            }
+            
+            for (let i = 0; i < 5; i++) {
+                pickups.push({ x: 200 + i * 250 + Math.random() * 100, y: mission.height - 60, type: i % 2 === 0 ? 'health' : 'ammo', got: false });
+            }
+        }
+        
+        function spawnWave(n) {
+            const count = 3 + n * 2;
+            const sx = camX + NATIVE_WIDTH + 100;
+            for (let i = 0; i < count; i++) {
+                const type = Math.random() > 0.7 ? 'heavy' : 'soldier';
+                enemies.push(createEnemy(sx + Math.random() * 200, mission.height - 60 - Math.random() * 80, type));
+            }
+            if (n === mission.waves - 1) enemies.push(createEnemy(sx + 300, mission.height - 100, 'boss'));
+            waveActive = true;
+        }
+        
+        function createEnemy(x, y, type) {
+            const t = { soldier: { hp: 40, dmg: 8, spd: 1.5, rate: 60, clr: '#884444' }, heavy: { hp: 100, dmg: 15, spd: 0.8, rate: 90, clr: '#664422' }, boss: { hp: 300, dmg: 20, spd: 1.0, rate: 45, clr: '#aa2222', isBoss: true } }[type];
+            return { x, y, width: type === 'boss' ? 36 : 24, height: type === 'boss' ? 44 : 32, type, health: t.hp, maxHealth: t.hp, damage: t.dmg, speed: t.spd, fireRate: t.rate, fireCd: Math.random() * t.rate, color: t.clr, alive: true, isBoss: t.isBoss || false, stunned: false, stunTimer: 0, revealed: false };
+        }
+        
+        function startCutscene(d) { cutsceneQueue = [...d]; nextLine(); gameState = STATE.CUTSCENE; }
+        function nextLine() {
+            if (cutsceneQueue.length === 0) { currentLine = null; gameState = STATE.PLAYING; return; }
+            currentLine = cutsceneQueue.shift(); lineText = ''; lineChar = 0; lineTimer = 0;
+        }
+        
+        function update() {
+            updateInput(); globalTimer++; stateTimer++;
+            
+            switch (gameState) {
+                case STATE.TITLE:
+                    if (keyJust['Space'] || keyJust['Enter'] || mouseDown) { gameState = STATE.SELECT; stateTimer = 0; SFX.confirm(); mouseDown = false; }
+                    break;
+                case STATE.SELECT:
+                    if (keyJust['ArrowLeft'] || keyJust['KeyA']) { player.charIndex = (player.charIndex + 3) % 4; SFX.select(); }
+                    if (keyJust['ArrowRight'] || keyJust['KeyD']) { player.charIndex = (player.charIndex + 1) % 4; SFX.select(); }
+                    if (keyJust['Space'] || keyJust['Enter']) { startMission(0); SFX.confirm(); }
+                    break;
+                case STATE.CUTSCENE:
+                    updateCutscene();
+                    break;
+                case STATE.PLAYING:
+                    updateGameplay();
+                    break;
+                case STATE.PAUSED:
+                    if (keyJust['Escape']) gameState = STATE.PLAYING;
+                    break;
+                case STATE.OBJECTIVES:
+                    if (keyJust['Tab'] || keyJust['Escape']) gameState = STATE.PLAYING;
+                    break;
+                case STATE.GAME_OVER:
+                    if (stateTimer > 180 && (keyJust['Space'] || keyJust['Enter'])) { gameState = STATE.TITLE; stateTimer = 0; }
+                    break;
+                case STATE.VICTORY:
+                    updateCutscene();
+                    if (!currentLine && stateTimer > 200 && (keyJust['Space'] || keyJust['Enter'])) { gameState = STATE.TITLE; stateTimer = 0; }
+                    break;
+            }
+        }
+        
+        function updateCutscene() {
+            if (!currentLine) return;
+            lineTimer++;
+            if (lineChar < currentLine.text.length) { if (lineTimer % 2 === 0) { lineText += currentLine.text[lineChar++]; if (lineChar % 3 === 0) SFX.dialogue(); } }
+            if (keyJust['Space'] || keyJust['Enter'] || mouseDown) {
+                if (lineChar < currentLine.text.length) { lineText = currentLine.text; lineChar = currentLine.text.length; }
+                else nextLine();
+                mouseDown = false;
+            }
+        }
+        
+        function updateGameplay() {
+            if (keyJust['Escape']) { gameState = STATE.PAUSED; return; }
+            if (keyJust['Tab']) { gameState = STATE.OBJECTIVES; return; }
+            
+            const char = CHARACTERS[player.charIndex];
+            let dx = 0;
+            if (keys['KeyA'] || keys['ArrowLeft']) dx = -1;
+            if (keys['KeyD'] || keys['ArrowRight']) dx = 1;
+            
+            const onGround = player.y >= mission.height - 20 - player.height;
+            if ((keyJust['KeyW'] || keyJust['ArrowUp'] || keyJust['Space']) && onGround && !player.inCover) player.vy = -12;
+            
+            if (!player.inCover) {
+                player.vx = dx * 3;
+                player.vy += 0.5;
+                player.x += player.vx; player.y += player.vy;
+                if (player.y > mission.height - 20 - player.height) { player.y = mission.height - 20 - player.height; player.vy = 0; }
+                player.x = Math.max(player.width/2, Math.min(mission.width - player.width/2, player.x));
+                if (dx !== 0) player.facingRight = dx > 0;
+            }
+            
+            if (keyJust['Space'] && onGround) {
+                if (player.inCover) { player.inCover = false; player.coverObj = null; }
+                else {
+                    for (let c of covers) {
+                        if (c.hp <= 0) continue;
+                        if (Math.abs(player.x - (c.x + c.w/2)) < 50 && player.y + player.height > c.y) {
+                            player.inCover = true; player.coverObj = c; player.x = c.x + c.w/2; break;
+                        }
+                    }
+                }
+            }
+            
+            const wmx = mouseX + camX, wmy = mouseY + camY;
+            const aim = Math.atan2(wmy - player.y, wmx - player.x);
+            player.facingRight = wmx > player.x;
+            
+            if (mouseDown && !player.reloading && player.ammo > 0) {
+                player.fireCd = player.fireCd || 0; player.fireCd--;
+                if (player.fireCd <= 0) { fireWeapon(char, aim); player.fireCd = 60 / char.stats.fireRate; }
+            }
+            
+            if ((keyJust['KeyR'] || player.ammo === 0) && !player.reloading && player.reserve > 0) { player.reloading = true; player.reloadTimer = 90; SFX.reload(); }
+            if (player.reloading) { player.reloadTimer--; if (player.reloadTimer <= 0) { const n = Math.min(player.maxAmmo - player.ammo, player.reserve); player.ammo += n; player.reserve -= n; player.reloading = false; } }
+            
+            if (keyJust['KeyQ'] && player.ability >= 100) useAbility(char);
+            if (player.ability < player.maxAbility) player.ability += 0.15;
+            if (player.abilityActive) { player.abilityTimer--; if (player.abilityTimer <= 0) player.abilityActive = false; }
+            if (player.shieldDelay > 0) player.shieldDelay--; else if (player.shield < player.maxShield) player.shield += 0.2;
+            
+            if (keyJust['Digit1']) squadCmd = 0; if (keyJust['Digit2']) squadCmd = 1; if (keyJust['Digit3']) squadCmd = 2; if (keyJust['Digit4']) squadCmd = 3;
+            
+            updateSquad(); updateEnemies(); updateProjectiles(); updateEffects();
+            
+            pickups.forEach(p => {
+                if (p.got) return;
+                if (dist(player.x, player.y, p.x, p.y) < 40) {
+                    p.got = true;
+                    if (p.type === 'health') player.health = Math.min(player.maxHealth, player.health + 30);
+                    else player.reserve = Math.min(300, player.reserve + 60);
+                    SFX.pickup(); spawnParts(p.x, p.y, p.type === 'health' ? COLORS.health : COLORS.ammo, 10);
+                }
+            });
+            
+            triggers.forEach(t => {
+                if (t.done) return;
+                if (player.x > t.x && player.x < t.x + t.w) {
+                    if (t.needWave && wave <= t.obj) { if (!waveActive && enemies.filter(e => e.alive).length === 0) { spawnWave(wave); wave++; } return; }
+                    if (t.needWave && enemies.filter(e => e.alive).length > 0) return;
+                    t.done = true; objComplete[t.obj] = true; SFX.objective();
+                    if (objComplete.every(c => c)) {
+                        if (currentMission >= MISSIONS.length - 1) { startCutscene(DIALOGUES.victory); gameState = STATE.VICTORY; stateTimer = 0; SFX.victory(); }
+                        else { currentMission++; startMission(currentMission); }
+                    }
+                }
+            });
+            
+            if (waveActive && enemies.filter(e => e.alive).length === 0) waveActive = false;
+            
+            camX += (player.x - NATIVE_WIDTH/3 - camX) * 0.08;
+            camY += (player.y - NATIVE_HEIGHT/2 - camY) * 0.08;
+            camX = Math.max(0, Math.min(mission.width - NATIVE_WIDTH, camX));
+            camY = Math.max(0, Math.min(mission.height - NATIVE_HEIGHT, camY));
+            if (camShake > 0) camShake *= 0.9;
+            
+            player.animTimer++; if (player.animTimer > 6) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % 4; }
+            if (player.invincible) { player.invTimer--; if (player.invTimer <= 0) player.invincible = false; }
+        }
+        
+        function fireWeapon(char, angle) {
+            player.ammo--;
+            const spread = 0.08, finalAngle = angle + (Math.random() - 0.5) * spread;
+            const spd = char.weapon === 'SNIPER' ? 20 : 12;
+            const dmg = char.stats.damage * (player.abilityActive && char.ability === 'DEAD EYE' ? 2 : 1);
+            projectiles.push({ x: player.x, y: player.y - 10, vx: Math.cos(finalAngle) * spd, vy: Math.sin(finalAngle) * spd, damage: dmg, owner: 'player', type: char.weapon === 'SNIPER' ? 'sniper' : 'bullet' });
+            spawnParts(player.x + Math.cos(finalAngle) * 20, player.y - 10, COLORS.muzzleFlash, 5);
+            SFX.gun();
+            if (player.abilityActive && char.ability === 'FURY MODE' && player.ammo > 0) {
+                player.ammo--;
+                projectiles.push({ x: player.x, y: player.y - 10, vx: Math.cos(finalAngle + 0.1) * spd, vy: Math.sin(finalAngle + 0.1) * spd, damage: dmg, owner: 'player', type: 'bullet' });
+            }
+        }
+        
+        function useAbility(char) {
+            player.ability = 0; player.abilityActive = true; player.abilityTimer = 300; SFX.ability();
+            if (char.ability === 'EMP BURST') {
+                enemies.forEach(e => { if (e.alive && dist(player.x, player.y, e.x, e.y) < 200) { e.stunned = true; e.stunTimer = 180; e.health -= 20; spawnParts(e.x, e.y, COLORS.natasha, 15); } });
+                spawnParts(player.x, player.y, COLORS.natasha, 30);
+            } else if (char.ability === 'TACTICAL SCAN') {
+                enemies.forEach(e => { if (e.alive) { e.revealed = true; e.revealTimer = 300; } });
+                spawnParts(player.x, player.y, COLORS.olga, 30);
+            } else spawnParts(player.x, player.y, char.color, 25);
+        }
+        
+        function updateSquad() {
+            squad.forEach(m => {
+                if (!m.alive) return;
+                let near = null, nearD = Infinity;
+                enemies.forEach(e => { if (!e.alive) return; const d = dist(m.x, m.y, e.x, e.y); if (d < nearD && d < 400) { nearD = d; near = e; } });
+                m.target = near;
+                
+                const cmd = CMDS[squadCmd].toLowerCase();
+                if (cmd === 'follow') { const fd = dist(m.x, m.y, player.x, player.y); if (fd > 80) m.x += (player.x - m.x) / fd * 2; }
+                else if (cmd === 'attack' && near && nearD > 150) m.x += (near.x - m.x) / nearD * 2.5;
+                else if (cmd === 'regroup') { const rd = dist(m.x, m.y, player.x, player.y); if (rd > 40) m.x += (player.x - m.x) / rd * 3; }
+                
+                m.y = Math.min(m.y, mission.height - 20 - 32);
+                if (m.target && m.cd <= 0) {
+                    const a = Math.atan2(m.target.y - m.y, m.target.x - m.x);
+                    projectiles.push({ x: m.x, y: m.y - 10, vx: Math.cos(a) * 10, vy: Math.sin(a) * 10, damage: m.char.stats.damage * 0.7, owner: 'squad', type: 'bullet' });
+                    m.cd = 60 / m.char.stats.fireRate;
+                    spawnParts(m.x + Math.cos(a) * 15, m.y - 10, COLORS.muzzleFlash, 3);
+                }
+                m.cd--;
+            });
+        }
+        
+        function updateEnemies() {
+            enemies.forEach(e => {
+                if (!e.alive) return;
+                if (e.stunned) { e.stunTimer--; if (e.stunTimer <= 0) e.stunned = false; return; }
+                if (e.revealed) { e.revealTimer--; if (e.revealTimer <= 0) e.revealed = false; }
+                
+                const dp = dist(e.x, e.y, player.x, player.y);
+                if (dp > 250) e.x += (player.x - e.x) / dp * e.speed;
+                else if (dp < 150 && !e.isBoss) e.x -= (player.x - e.x) / dp * e.speed * 0.5;
+                e.y = Math.min(e.y, mission.height - 20 - e.height);
+                
+                e.fireCd--;
+                if (e.fireCd <= 0 && dp < 500) {
+                    const a = Math.atan2(player.y - e.y, player.x - e.x);
+                    projectiles.push({ x: e.x, y: e.y - 10, vx: Math.cos(a + (Math.random() - 0.5) * 0.15) * 8, vy: Math.sin(a + (Math.random() - 0.5) * 0.15) * 8, damage: e.damage, owner: 'enemy', type: 'bullet' });
+                    e.fireCd = e.fireRate;
+                    spawnParts(e.x + Math.cos(a) * 15, e.y - 10, COLORS.muzzleFlash, 3);
+                    SFX.gun();
+                }
+            });
+        }
+        
+        function updateProjectiles() {
+            projectiles = projectiles.filter(p => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < camX - 50 || p.x > camX + NATIVE_WIDTH + 50 || p.y > mission.height - 20) return false;
+                
+                for (let c of covers) {
+                    if (c.hp <= 0) continue;
+                    if (p.x > c.x && p.x < c.x + c.w && p.y > c.y && p.y < c.y + c.h) {
+                        if (c.destruct) { c.hp -= p.damage; if (c.hp <= 0) spawnParts(c.x + c.w/2, c.y + c.h/2, COLORS.gray, 20); }
+                        spawnParts(p.x, p.y, COLORS.gray, 5); return false;
+                    }
+                }
+                
+                if (p.owner === 'enemy' && !player.invincible && dist(p.x, p.y, player.x, player.y - 16) < 20) { hurtPlayer(p.damage); return false; }
+                
+                if (p.owner === 'player' || p.owner === 'squad') {
+                    for (let e of enemies) {
+                        if (!e.alive) continue;
+                        if (dist(p.x, p.y, e.x, e.y - 16) < e.width) {
+                            e.health -= p.damage; spawnParts(p.x, p.y, COLORS.blood, 8); SFX.hit();
+                            if (e.health <= 0) { e.alive = false; spawnParts(e.x, e.y, e.color, 15); if (e.isBoss) { explosions.push({ x: e.x, y: e.y, r: 0, mr: 80, a: 1 }); camShake = 20; } }
+                            if (p.type !== 'sniper') return false;
+                        }
+                    }
+                }
+                
+                if (p.owner === 'enemy') {
+                    for (let m of squad) {
+                        if (!m.alive) continue;
+                        if (dist(p.x, p.y, m.x, m.y - 16) < 20) {
+                            m.health -= p.damage; spawnParts(p.x, p.y, COLORS.blood, 5);
+                            if (m.health <= 0) { m.alive = false; spawnParts(m.x, m.y, m.char.color, 10); }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            });
+        }
+        
+        function hurtPlayer(dmg) {
+            if (player.shield > 0) { const abs = Math.min(player.shield, dmg); player.shield -= abs; dmg -= abs; }
+            player.health -= dmg; player.shieldDelay = 180; player.invincible = true; player.invTimer = 30; camShake = 8;
+            spawnParts(player.x, player.y, COLORS.blood, 10); SFX.hit();
+            if (player.health <= 0) { gameState = STATE.GAME_OVER; stateTimer = 0; SFX.gameOver(); }
+        }
+        
+        function spawnParts(x, y, color, count) { for (let i = 0; i < count; i++) particles.push({ x, y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6 - 2, color, life: 30 + Math.random() * 30, size: 2 + Math.random() * 4, grav: 0.2 }); }
+        function updateEffects() {
+            particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.vy += p.grav || 0; p.vx *= 0.98; p.life--; return p.life > 0; });
+            explosions = explosions.filter(e => { e.r += 4; e.a -= 0.05; return e.a > 0; });
+        }
+        
+        function dist(x1, y1, x2, y2) { return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2); }
+        
+        function render() {
+            ctx.fillStyle = COLORS.black; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save(); ctx.scale(SCALE, SCALE); ctx.imageSmoothingEnabled = false;
+            
+            switch (gameState) {
+                case STATE.TITLE: renderTitle(); break;
+                case STATE.SELECT: renderSelect(); break;
+                case STATE.CUTSCENE: if (mission) renderGameplay(); renderCutscene(); break;
+                case STATE.PLAYING: case STATE.PAUSED: case STATE.OBJECTIVES:
+                    renderGameplay(); renderHUD();
+                    if (gameState === STATE.PAUSED) renderPause();
+                    if (gameState === STATE.OBJECTIVES) renderObj();
+                    break;
+                case STATE.GAME_OVER: renderGameOver(); break;
+                case STATE.VICTORY: renderVictory(); break;
+            }
+            ctx.restore();
+        }
+        
+        function renderTitle() {
+            ctx.fillStyle = COLORS.nearBlack; ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            for (let i = 0; i < 100; i++) { const x = (i * 97 + globalTimer * 0.5) % NATIVE_WIDTH, y = (i * 61) % NATIVE_HEIGHT; ctx.fillStyle = `rgba(255,102,51,${0.3 + Math.sin(globalTimer * 0.02 + i) * 0.2})`; ctx.fillRect(x, y, 2, 2); }
+            
+            const ly = 100 + Math.sin(globalTimer * 0.02) * 5;
+            ctx.fillStyle = COLORS.black; ctx.fillRect(140, ly - 30, 360, 80);
+            ctx.fillStyle = COLORS.primary; ctx.font = 'bold 48px "Bebas Neue", sans-serif'; ctx.fillText('THE SPARROWS', 160, ly + 15);
+            ctx.fillStyle = COLORS.secondary; ctx.font = '24px "Bebas Neue", sans-serif'; ctx.fillText('SEASON 6', 275, ly + 45);
+            ctx.fillStyle = COLORS.white; ctx.font = 'bold 20px "Inter", sans-serif'; ctx.fillText('SHADOWS RISING', 245, ly + 75);
+            ctx.fillStyle = COLORS.lightGray; ctx.font = '12px "Inter", sans-serif'; ctx.fillText('THE PAST NEVER STAYS BURIED', 235, 230);
+            
+            if (Math.floor(globalTimer / 40) % 2 === 0) { ctx.fillStyle = COLORS.primary; ctx.font = '14px "Inter", sans-serif'; ctx.fillText('PRESS START', 280, 320); }
+            ctx.fillStyle = COLORS.gray; ctx.font = '10px "Inter", sans-serif'; ctx.fillText('2025 ZUUP INNOVATION LAB', 255, NATIVE_HEIGHT - 15);
+        }
+        
+        function renderSelect() {
+            ctx.fillStyle = COLORS.nearBlack; ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            ctx.fillStyle = COLORS.primary; ctx.font = 'bold 24px "Bebas Neue", sans-serif'; ctx.fillText('SELECT OPERATIVE', 235, 40);
+            
+            CHARACTERS.forEach((c, i) => {
+                const x = 60 + i * 145, y = 70, sel = i === player.charIndex;
+                ctx.fillStyle = sel ? COLORS.darkGray : COLORS.black; ctx.fillRect(x, y, 130, 180);
+                if (sel) { ctx.strokeStyle = c.color; ctx.lineWidth = 3; ctx.strokeRect(x, y, 130, 180); }
+                ctx.fillStyle = c.color; ctx.globalAlpha = 0.3; ctx.fillRect(x + 10, y + 10, 110, 70); ctx.globalAlpha = 1;
+                ctx.fillStyle = c.color; ctx.fillRect(x + 45, y + 25, 40, 50); ctx.fillRect(x + 52, y + 15, 26, 16);
+                ctx.fillStyle = COLORS.white; ctx.font = 'bold 11px "Inter", sans-serif'; ctx.fillText(c.codename, x + 10, y + 100);
+                ctx.fillStyle = c.color; ctx.font = '9px "Inter", sans-serif'; ctx.fillText(c.name, x + 10, y + 115);
+                ctx.fillStyle = COLORS.lightGray; ctx.font = '8px "Inter", sans-serif'; ctx.fillText(c.role, x + 10, y + 130);
+                if (sel) { ctx.fillStyle = COLORS.gray; ctx.fillText('WEAPON: ' + c.weapon, x + 10, y + 150); ctx.fillText('ABILITY: ' + c.ability, x + 10, y + 165); }
+            });
+            
+            if (Math.floor(globalTimer / 35) % 2 === 0) { ctx.fillStyle = COLORS.primary; ctx.font = '12px "Inter", sans-serif'; ctx.fillText('PRESS START TO BEGIN', 250, 300); }
+        }
+        
+        function renderGameplay() {
+            const sx = (Math.random() - 0.5) * camShake, sy = (Math.random() - 0.5) * camShake;
+            ctx.save(); ctx.translate(-Math.floor(camX) + sx, -Math.floor(camY) + sy);
+            
+            const bg = ctx.createLinearGradient(0, 0, 0, mission.height); bg.addColorStop(0, '#0a1015'); bg.addColorStop(1, '#1a2530');
+            ctx.fillStyle = bg; ctx.fillRect(camX - 10, camY - 10, NATIVE_WIDTH + 20, NATIVE_HEIGHT + 20);
+            
+            ctx.fillStyle = COLORS.ground; ctx.fillRect(0, mission.height - 20, mission.width, 40);
+            
+            covers.forEach(c => {
+                if (c.hp <= 0) { ctx.fillStyle = COLORS.gray; ctx.globalAlpha = 0.3; ctx.fillRect(c.x + 5, c.y + c.h - 10, c.w - 10, 10); ctx.globalAlpha = 1; return; }
+                ctx.fillStyle = COLORS.cover; ctx.fillRect(c.x, c.y, c.w, c.h);
+                ctx.fillStyle = COLORS.metal; ctx.fillRect(c.x, c.y, c.w, 4);
+            });
+            
+            pickups.forEach(p => {
+                if (p.got) return;
+                const b = Math.sin(globalTimer * 0.08) * 4, clr = p.type === 'health' ? COLORS.health : COLORS.ammo;
+                ctx.fillStyle = clr; ctx.fillRect(p.x - 8, p.y - 8 + b, 16, 16);
+                ctx.globalAlpha = 0.3; ctx.fillRect(p.x - 12, p.y - 12 + b, 24, 24); ctx.globalAlpha = 1;
+            });
+            
+            enemies.forEach(e => {
+                if (!e.alive) return;
+                const flash = e.stunned && Math.floor(globalTimer / 4) % 2 === 0;
+                ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(e.x, mission.height - 20, e.width / 2, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+                ctx.fillStyle = flash ? COLORS.white : e.color; ctx.fillRect(e.x - e.width / 2, e.y - e.height, e.width, e.height); ctx.fillRect(e.x - e.width / 3, e.y - e.height - 12, e.width * 0.66, 14);
+                if (e.isBoss) { ctx.fillStyle = COLORS.darkGray; ctx.fillRect(e.x - 30, e.y - e.height - 25, 60, 6); ctx.fillStyle = COLORS.healthLow; ctx.fillRect(e.x - 30, e.y - e.height - 25, 60 * (e.health / e.maxHealth), 6); }
+                if (e.revealed) { ctx.strokeStyle = COLORS.olga; ctx.lineWidth = 2; ctx.strokeRect(e.x - e.width, e.y - e.height - 15, e.width * 2, e.height + 20); }
+            });
+            
+            squad.forEach(m => {
+                if (!m.alive) return;
+                ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(m.x, mission.height - 20, 10, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+                ctx.fillStyle = m.char.color; ctx.fillRect(m.x - 10, m.y - 28, 20, 30); ctx.fillRect(m.x - 7, m.y - 38, 14, 12);
+                ctx.fillStyle = COLORS.darkGray; ctx.fillRect(m.x - 15, m.y - 48, 30, 4); ctx.fillStyle = m.health > 30 ? COLORS.health : COLORS.healthLow; ctx.fillRect(m.x - 15, m.y - 48, 30 * (m.health / m.maxHealth), 4);
+            });
+            
+            const char = CHARACTERS[player.charIndex], vis = !player.invincible || Math.floor(globalTimer / 4) % 2 === 0;
+            if (vis) {
+                ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(player.x, mission.height - 20, 12, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+                ctx.fillStyle = player.inCover ? COLORS.darkGray : char.color;
+                const by = player.inCover ? player.y - 20 : player.y - player.height, bh = player.inCover ? 22 : player.height;
+                ctx.fillRect(player.x - 12, by, 24, bh);
+                ctx.fillStyle = char.color; const hy = player.inCover ? player.y - 32 : player.y - player.height - 14; ctx.fillRect(player.x - 8, hy, 16, 14);
+                if (player.abilityActive) { ctx.strokeStyle = char.color; ctx.globalAlpha = 0.6 + Math.sin(globalTimer * 0.2) * 0.3; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(player.x, player.y - 16, 25 + Math.sin(globalTimer * 0.1) * 5, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+            }
+            
+            projectiles.forEach(p => {
+                const clr = p.owner === 'enemy' ? COLORS.primaryDark : COLORS.secondary;
+                if (p.type === 'sniper') { ctx.strokeStyle = COLORS.anya; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x - p.vx * 2, p.y - p.vy * 2); ctx.lineTo(p.x, p.y); ctx.stroke(); }
+                else { ctx.fillStyle = clr; ctx.fillRect(p.x - 3, p.y - 2, 6, 4); }
+            });
+            
+            explosions.forEach(e => {
+                const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.r);
+                g.addColorStop(0, `rgba(255,200,100,${e.a})`); g.addColorStop(0.5, `rgba(255,100,50,${e.a * 0.5})`); g.addColorStop(1, 'rgba(100,50,20,0)');
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+            });
+            
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 60; ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size); }); ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+        
+        function renderHUD() {
+            const char = CHARACTERS[player.charIndex];
+            ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.7; ctx.fillRect(10, NATIVE_HEIGHT - 60, 180, 50); ctx.globalAlpha = 1;
+            ctx.fillStyle = char.color; ctx.fillRect(15, NATIVE_HEIGHT - 55, 40, 40); ctx.fillStyle = COLORS.nearBlack; ctx.fillRect(20, NATIVE_HEIGHT - 50, 30, 30); ctx.fillStyle = char.color; ctx.fillRect(25, NATIVE_HEIGHT - 45, 20, 20);
+            ctx.fillStyle = COLORS.gray; ctx.font = '8px "Inter", sans-serif'; ctx.fillText('HEALTH', 65, NATIVE_HEIGHT - 45);
+            ctx.fillStyle = COLORS.darkGray; ctx.fillRect(65, NATIVE_HEIGHT - 42, 100, 10); ctx.fillStyle = player.health > 30 ? COLORS.health : COLORS.healthLow; ctx.fillRect(65, NATIVE_HEIGHT - 42, 100 * (player.health / player.maxHealth), 10);
+            ctx.fillStyle = COLORS.gray; ctx.fillText('SHIELD', 65, NATIVE_HEIGHT - 22);
+            ctx.fillStyle = COLORS.darkGray; ctx.fillRect(65, NATIVE_HEIGHT - 20, 100, 6); ctx.fillStyle = COLORS.shield; ctx.fillRect(65, NATIVE_HEIGHT - 20, 100 * (player.shield / player.maxShield), 6);
+            
+            ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.7; ctx.fillRect(NATIVE_WIDTH - 140, NATIVE_HEIGHT - 60, 130, 50); ctx.globalAlpha = 1;
+            ctx.fillStyle = COLORS.ammo; ctx.font = 'bold 24px "Bebas Neue", sans-serif'; ctx.fillText(player.ammo.toString().padStart(2, '0'), NATIVE_WIDTH - 130, NATIVE_HEIGHT - 28);
+            ctx.fillStyle = COLORS.gray; ctx.font = '12px "Inter", sans-serif'; ctx.fillText('/ ' + player.reserve, NATIVE_WIDTH - 95, NATIVE_HEIGHT - 30);
+            if (player.reloading) { ctx.fillStyle = COLORS.primary; ctx.font = '10px "Inter", sans-serif'; ctx.fillText('RELOADING...', NATIVE_WIDTH - 130, NATIVE_HEIGHT - 45); }
+            ctx.fillStyle = COLORS.gray; ctx.font = '8px "Inter", sans-serif'; ctx.fillText('[Q] ' + char.ability, NATIVE_WIDTH - 130, NATIVE_HEIGHT - 12);
+            ctx.fillStyle = COLORS.darkGray; ctx.fillRect(NATIVE_WIDTH - 60, NATIVE_HEIGHT - 18, 50, 8); ctx.fillStyle = player.ability >= 100 ? char.color : COLORS.gray; ctx.fillRect(NATIVE_WIDTH - 60, NATIVE_HEIGHT - 18, 50 * (player.ability / 100), 8);
+            
+            ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.6; ctx.fillRect(0, 0, NATIVE_WIDTH, 30); ctx.globalAlpha = 1;
+            ctx.fillStyle = COLORS.primary; ctx.font = 'bold 12px "Inter", sans-serif'; ctx.fillText(mission.name, 15, 20);
+            ctx.fillStyle = COLORS.lightGray; ctx.font = '10px "Inter", sans-serif'; ctx.fillText(mission.location, 15 + ctx.measureText(mission.name).width + 20, 20);
+            if (waveActive) { ctx.fillStyle = COLORS.primary; ctx.font = 'bold 14px "Bebas Neue", sans-serif'; ctx.fillText('WAVE ' + wave + '/' + mission.waves, NATIVE_WIDTH - 80, 20); }
+            ctx.fillStyle = COLORS.gray; ctx.font = '9px "Inter", sans-serif'; ctx.fillText('SQUAD: ' + CMDS[squadCmd], NATIVE_WIDTH / 2 - 30, 20);
+        }
+        
+        function renderCutscene() {
+            if (!currentLine) return;
+            ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.85; ctx.fillRect(40, NATIVE_HEIGHT - 100, NATIVE_WIDTH - 80, 70); ctx.globalAlpha = 1;
+            ctx.strokeStyle = COLORS.primary; ctx.lineWidth = 2; ctx.strokeRect(40, NATIVE_HEIGHT - 100, NATIVE_WIDTH - 80, 70);
+            ctx.fillStyle = COLORS.primary; ctx.font = 'bold 11px "Inter", sans-serif'; ctx.fillText(currentLine.speaker, 60, NATIVE_HEIGHT - 82);
+            ctx.fillStyle = COLORS.white; ctx.font = '11px "Inter", sans-serif';
+            const mw = NATIVE_WIDTH - 120; let line = '', ty = NATIVE_HEIGHT - 65;
+            lineText.split(' ').forEach(w => { const t = line + w + ' '; if (ctx.measureText(t).width > mw) { ctx.fillText(line, 60, ty); line = w + ' '; ty += 16; } else line = t; });
+            ctx.fillText(line, 60, ty);
+            if (lineChar >= currentLine.text.length && Math.floor(globalTimer / 25) % 2 === 0) { ctx.fillStyle = COLORS.primary; ctx.fillText('▼', NATIVE_WIDTH - 60, NATIVE_HEIGHT - 40); }
+        }
+        
+        function renderPause() {
+            ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.8; ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT); ctx.globalAlpha = 1;
+            ctx.fillStyle = COLORS.white; ctx.font = 'bold 32px "Bebas Neue", sans-serif'; ctx.fillText('PAUSED', NATIVE_WIDTH / 2 - 50, 170);
+            ctx.fillStyle = COLORS.lightGray; ctx.font = '12px "Inter", sans-serif'; ctx.fillText('Press ESC to continue', NATIVE_WIDTH / 2 - 60, 210);
+        }
+        
+        function renderObj() {
+            ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.9; ctx.fillRect(140, 60, NATIVE_WIDTH - 280, NATIVE_HEIGHT - 120); ctx.globalAlpha = 1;
+            ctx.strokeStyle = COLORS.primary; ctx.lineWidth = 2; ctx.strokeRect(140, 60, NATIVE_WIDTH - 280, NATIVE_HEIGHT - 120);
+            ctx.fillStyle = COLORS.primary; ctx.font = 'bold 18px "Bebas Neue", sans-serif'; ctx.fillText('MISSION OBJECTIVES', 160, 95);
+            ctx.fillStyle = COLORS.lightGray; ctx.font = '10px "Inter", sans-serif'; ctx.fillText(mission.name + ' // ' + mission.location, 160, 115);
+            mission.objectives.forEach((o, i) => { ctx.fillStyle = objComplete[i] ? COLORS.health : COLORS.white; ctx.font = '12px "Inter", sans-serif'; ctx.fillText((objComplete[i] ? '✓ ' : '○ ') + o, 160, 145 + i * 28); });
+            ctx.fillStyle = COLORS.gray; ctx.font = '10px "Inter", sans-serif'; ctx.fillText('Press TAB to close', NATIVE_WIDTH / 2 - 50, NATIVE_HEIGHT - 80);
+        }
+        
+        function renderGameOver() {
+            ctx.fillStyle = COLORS.black; ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            ctx.fillStyle = COLORS.healthLow; ctx.font = 'bold 40px "Bebas Neue", sans-serif'; ctx.fillText('MISSION FAILED', NATIVE_WIDTH / 2 - 120, 160);
+            ctx.fillStyle = COLORS.lightGray; ctx.font = '14px "Inter", sans-serif'; ctx.fillText('The Shadows have won this round.', NATIVE_WIDTH / 2 - 100, 200);
+            if (stateTimer > 180 && Math.floor(globalTimer / 35) % 2 === 0) { ctx.fillStyle = COLORS.white; ctx.font = '12px "Inter", sans-serif'; ctx.fillText('Press START to continue', NATIVE_WIDTH / 2 - 70, 280); }
+        }
+        
+        function renderVictory() {
+            ctx.fillStyle = COLORS.nearBlack; ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            for (let i = 0; i < 80; i++) { const x = (i * 83 + globalTimer * 0.5) % NATIVE_WIDTH, y = (i * 47 + globalTimer * 0.3) % NATIVE_HEIGHT, c = [COLORS.natasha, COLORS.maria, COLORS.anya, COLORS.olga, COLORS.primary][i % 5]; ctx.fillStyle = c; ctx.globalAlpha = 0.5 + Math.sin(globalTimer * 0.02 + i) * 0.3; ctx.fillRect(x, y, 3, 3); } ctx.globalAlpha = 1;
+            ctx.fillStyle = COLORS.primary; ctx.font = 'bold 36px "Bebas Neue", sans-serif'; ctx.fillText('THE SPARROWS', NATIVE_WIDTH / 2 - 100, 80);
+            ctx.fillStyle = COLORS.secondary; ctx.font = 'bold 24px "Bebas Neue", sans-serif'; ctx.fillText('MISSION ACCOMPLISHED', NATIVE_WIDTH / 2 - 100, 115);
+            [COLORS.natasha, COLORS.maria, COLORS.anya, COLORS.olga].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(200 + i * 60 - 15, 145, 30, 45); ctx.fillRect(200 + i * 60 - 10, 132, 20, 16); });
+            if (currentLine) renderCutscene();
+            else { ctx.fillStyle = COLORS.white; ctx.font = '12px "Inter", sans-serif'; ctx.fillText('THE SHADOW COLLECTIVE: DESTROYED', NATIVE_WIDTH / 2 - 100, 230); ctx.fillText('THE SPARROWS: LEGENDS', NATIVE_WIDTH / 2 - 70, 260); if (stateTimer > 200 && Math.floor(globalTimer / 35) % 2 === 0) { ctx.fillStyle = COLORS.primary; ctx.fillText('Press START', NATIVE_WIDTH / 2 - 35, 320); } }
+        }
+        
+        function gameLoop() { update(); render(); requestAnimationFrame(gameLoop); }
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,2540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE SPARROWS - Season 5: Revelations</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Rajdhani', sans-serif;
+            overflow: hidden;
+        }
+        
+        .game-wrapper {
+            position: relative;
+        }
+        
+        .screen-bezel {
+            background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 50%, #1a1a1a 100%);
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 
+                0 0 60px rgba(0, 200, 150, 0.1),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        
+        .screen-inner {
+            background: #000;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #gameCanvas {
+            display: block;
+        }
+        
+        .overlay-effects {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .film-grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            mix-blend-mode: overlay;
+        }
+        
+        .vignette-heavy {
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+        }
+        
+        .controls-bar {
+            margin-top: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            color: #00c896;
+            font-size: 11px;
+            font-family: 'Roboto Mono', monospace;
+            text-shadow: 0 0 10px rgba(0, 200, 150, 0.5);
+        }
+        
+        .controls-bar span {
+            color: #ff6b35;
+        }
+        
+        .era-label {
+            position: absolute;
+            top: -20px;
+            right: 15px;
+            font-size: 10px;
+            color: #00c896;
+            letter-spacing: 4px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="era-label">128-BIT ERA</div>
+        <div class="screen-bezel">
+            <div class="screen-inner">
+                <canvas id="gameCanvas" width="1024" height="768"></canvas>
+                <div class="overlay-effects film-grain"></div>
+                <div class="overlay-effects vignette-heavy"></div>
+            </div>
+        </div>
+    </div>
+    <div class="controls-bar">
+        <div><span>WASD</span> MOVE</div>
+        <div><span>SHIFT</span> SPRINT</div>
+        <div><span>CTRL</span> CROUCH</div>
+        <div><span>SPACE</span> COVER/ACTION</div>
+        <div><span>E</span> TAKEDOWN</div>
+        <div><span>Q</span> GADGET</div>
+        <div><span>F</span> VISION MODE</div>
+        <div><span>TAB</span> OBJECTIVES</div>
+    </div>
+
+    <script>
+        // ============================================
+        // THE SPARROWS - SEASON 5: REVELATIONS
+        // PS2/Xbox Era (2000-2005)
+        // Advanced Tactical Stealth Action
+        // ============================================
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // PS2-era resolution (512×384 scaled 2x)
+        const NATIVE_WIDTH = 512;
+        const NATIVE_HEIGHT = 384;
+        const SCALE = 2;
+        
+        canvas.width = NATIVE_WIDTH * SCALE;
+        canvas.height = NATIVE_HEIGHT * SCALE;
+        
+        // Enhanced Color Palette
+        const COLORS = {
+            // Core
+            black: '#0a0a0c',
+            nearBlack: '#12141a',
+            darkGray: '#1e222a',
+            gray: '#3a424f',
+            lightGray: '#6a7585',
+            white: '#e8ecf0',
+            
+            // Tactical Green
+            darkGreen: '#0a1f1a',
+            green: '#00c896',
+            brightGreen: '#00ffc8',
+            neonGreen: '#39ff14',
+            
+            // Alert
+            darkRed: '#1a0a0a',
+            red: '#ff3333',
+            brightRed: '#ff6666',
+            orange: '#ff6b35',
+            amber: '#ffaa00',
+            
+            // Tech Blue
+            darkBlue: '#0a1428',
+            blue: '#2288ff',
+            brightBlue: '#44aaff',
+            cyan: '#00ddff',
+            
+            // Night Vision
+            nvGreen: '#00ff00',
+            nvDark: '#001a00',
+            
+            // Thermal
+            thermalCold: '#0044ff',
+            thermalWarm: '#ff4400',
+            thermalHot: '#ffff00',
+            
+            // Environment
+            concrete: '#4a4f58',
+            metal: '#5a6270',
+            rust: '#6a4535',
+            glass: '#88aacc',
+            
+            // Shadows
+            shadowLight: 'rgba(0,0,0,0.3)',
+            shadowMedium: 'rgba(0,0,0,0.5)',
+            shadowDark: 'rgba(0,0,0,0.8)'
+        };
+        
+        // Game States
+        const STATE = {
+            TITLE: 0,
+            BRIEFING: 1,
+            SELECT: 2,
+            LOADING: 3,
+            PLAYING: 4,
+            PAUSED: 5,
+            CODEC: 6,
+            OBJECTIVES: 7,
+            GAME_OVER: 8,
+            MISSION_COMPLETE: 9,
+            VICTORY: 10
+        };
+        
+        let gameState = STATE.TITLE;
+        let stateTimer = 0;
+        let globalTimer = 0;
+        
+        // Vision Modes
+        const VISION = {
+            NORMAL: 0,
+            NIGHT: 1,
+            THERMAL: 2
+        };
+        
+        let visionMode = VISION.NORMAL;
+        
+        // Alert Levels
+        const ALERT = {
+            STEALTH: 0,
+            SUSPICIOUS: 1,
+            CAUTION: 2,
+            ALERT: 3,
+            COMBAT: 4
+        };
+        
+        let alertLevel = ALERT.STEALTH;
+        let alertTimer = 0;
+        let alertDecayTimer = 0;
+        
+        // Characters - now rogue operatives
+        const CHARACTERS = [
+            {
+                name: 'NATASHA GANNIBAL',
+                codename: 'CIPHER',
+                status: 'ROGUE OPERATIVE',
+                specialty: 'CYBER WARFARE',
+                color: COLORS.cyan,
+                darkColor: COLORS.darkBlue,
+                ability: 'SYSTEM BREACH',
+                abilityDesc: 'HACK ANY ELECTRONIC SYSTEM',
+                stats: { stealth: 8, combat: 6, tech: 10, endurance: 7 }
+            },
+            {
+                name: 'MARIA KOFI',
+                codename: 'VENOM',
+                status: 'ROGUE OPERATIVE',
+                specialty: 'CLOSE QUARTERS',
+                color: COLORS.brightGreen,
+                darkColor: COLORS.darkGreen,
+                ability: 'GHOST STRIKE',
+                abilityDesc: 'CHAIN SILENT TAKEDOWNS',
+                stats: { stealth: 7, combat: 10, tech: 5, endurance: 9 }
+            },
+            {
+                name: 'ANYA DELGADO',
+                codename: 'HAWK',
+                status: 'ROGUE OPERATIVE',
+                specialty: 'PRECISION FIRE',
+                color: COLORS.orange,
+                darkColor: COLORS.rust,
+                ability: 'DEAD EYE',
+                abilityDesc: 'TIME-SLOWED TARGETING',
+                stats: { stealth: 9, combat: 8, tech: 6, endurance: 6 }
+            },
+            {
+                name: 'OLGA HASSANOVA',
+                codename: 'ORACLE',
+                status: 'STATUS UNKNOWN',
+                specialty: 'INTELLIGENCE',
+                color: COLORS.amber,
+                darkColor: '#3a2a0a',
+                ability: 'FORESIGHT',
+                abilityDesc: 'PREDICT ENEMY MOVEMENTS',
+                stats: { stealth: 10, combat: 5, tech: 9, endurance: 6 },
+                locked: true
+            }
+        ];
+        
+        // Player State
+        let player = {
+            x: 80,
+            y: 300,
+            angle: 0,
+            width: 16,
+            height: 16,
+            
+            charIndex: 0,
+            
+            // Movement
+            speed: 0,
+            maxWalkSpeed: 1.8,
+            maxRunSpeed: 3.2,
+            crouchSpeed: 0.9,
+            
+            // States
+            moving: false,
+            running: false,
+            crouching: false,
+            inCover: false,
+            coverWall: null,
+            
+            // Combat
+            health: 100,
+            maxHealth: 100,
+            armor: 50,
+            maxArmor: 50,
+            
+            // Abilities
+            abilityCharge: 100,
+            maxAbilityCharge: 100,
+            abilityActive: false,
+            abilityTimer: 0,
+            
+            // Detection
+            visibility: 1.0, // 0 = invisible, 1 = fully visible
+            noise: 0, // Sound level
+            detected: false,
+            
+            // Animation
+            animFrame: 0,
+            animTimer: 0,
+            
+            // Invincibility
+            invincible: false,
+            invincibleTimer: 0
+        };
+        
+        // Mission Data
+        const MISSIONS = [
+            {
+                name: 'GOING DARK',
+                location: 'DIRECTORATE SAFEHOUSE - ODESSA',
+                briefing: 'THE DIRECTORATE HAS BRANDED US TRAITORS. WE NEED TO DISAPPEAR.',
+                objectives: [
+                    'INFILTRATE THE SAFEHOUSE',
+                    'RETRIEVE IDENTITY DOCUMENTS',
+                    'ELIMINATE PURSUIT CAPABILITY',
+                    'EXTRACT UNDETECTED'
+                ],
+                width: 600,
+                height: 450,
+                theme: 'safehouse',
+                lightLevel: 0.4
+            },
+            {
+                name: 'BURNED ASSETS',
+                location: 'CIA BLACK SITE - CLASSIFIED',
+                briefing: 'THE AMERICANS HAVE FILES ON PROJECT MOCKINGBIRD. WE NEED THEM.',
+                objectives: [
+                    'BYPASS PERIMETER SECURITY',
+                    'ACCESS THE ARCHIVE',
+                    'DOWNLOAD MOCKINGBIRD FILES',
+                    'AVOID INTERNATIONAL INCIDENT'
+                ],
+                width: 700,
+                height: 500,
+                theme: 'blacksite',
+                lightLevel: 0.3
+            },
+            {
+                name: 'GHOST PROTOCOL',
+                location: 'DIRECTORATE HQ - MOSCOW',
+                briefing: 'TIME TO BRING THE FIGHT TO THEM. THE DIRECTOR MUST ANSWER FOR MOCKINGBIRD.',
+                objectives: [
+                    'INFILTRATE DIRECTORATE HQ',
+                    'DISABLE COMMUNICATIONS',
+                    'LOCATE THE DIRECTOR',
+                    'EXTRACT OLGA'
+                ],
+                width: 800,
+                height: 550,
+                theme: 'headquarters',
+                lightLevel: 0.5,
+                isFinal: true
+            }
+        ];
+        
+        let currentMission = 0;
+        let mission = null;
+        let objectivesComplete = [];
+        
+        // Level entities
+        let walls = [];
+        let coverPoints = [];
+        let guards = [];
+        let cameras = [];
+        let lights = [];
+        let items = [];
+        let doors = [];
+        let terminals = [];
+        let triggers = [];
+        let projectiles = [];
+        let particles = [];
+        let bodies = [];
+        
+        // Camera
+        let camX = 0;
+        let camY = 0;
+        let camShake = 0;
+        
+        // Lighting
+        let lightMap = null;
+        
+        // Codec / Comms
+        let commsQueue = [];
+        let currentComm = null;
+        let commText = '';
+        let commCharIndex = 0;
+        let commTimer = 0;
+        
+        // Story Dialogues
+        const DIALOGUES = {
+            intro: [
+                { speaker: 'NATASHA', text: 'WE ARE NOW ENEMIES OF THE STATE. EVERY AGENCY WILL BE HUNTING US.' },
+                { speaker: 'MARIA', text: 'THEN WE BECOME GHOSTS. WE KNOW HOW THEY THINK.' },
+                { speaker: 'ANYA', text: 'WHAT ABOUT OLGA? IS SHE REALLY—' },
+                { speaker: 'NATASHA', text: 'SHE WAS A VICTIM. LIKE US. BUT SHE\'S STILL INSIDE THE DIRECTORATE.' },
+                { speaker: 'MARIA', text: 'THEN WE GET HER OUT. BUT FIRST, WE NEED TO DISAPPEAR.' }
+            ],
+            mission2_start: [
+                { speaker: 'NATASHA', text: 'THE CIA HAS BEEN MONITORING MOCKINGBIRD FOR YEARS.' },
+                { speaker: 'ANYA', text: 'HOW DO YOU KNOW?' },
+                { speaker: 'NATASHA', text: 'BECAUSE THEY TRIED TO RECRUIT ME. TWICE.' },
+                { speaker: 'MARIA', text: 'YOU NEVER MENTIONED THAT.' },
+                { speaker: 'NATASHA', text: 'SOME SECRETS KEEP US ALIVE. THIS ONE MIGHT SAVE US.' }
+            ],
+            mission3_start: [
+                { speaker: 'MARIA', text: 'THE DIRECTOR. AFTER ALL THIS TIME.' },
+                { speaker: 'NATASHA', text: 'HE CREATED US. CONTROLLED US. USED US.' },
+                { speaker: 'ANYA', text: 'AND NOW?' },
+                { speaker: 'NATASHA', text: 'NOW HE FACES WHAT HE MADE.' },
+                { speaker: 'MARIA', text: 'OLGA IS IN THERE SOMEWHERE. WE DON\'T LEAVE WITHOUT HER.' }
+            ],
+            olga_found: [
+                { speaker: 'OLGA', text: '...YOU CAME.' },
+                { speaker: 'MARIA', text: 'OF COURSE WE CAME.' },
+                { speaker: 'OLGA', text: 'THEY SHOWED ME EVERYTHING. WHAT I WAS. WHAT THEY MADE ME DO.' },
+                { speaker: 'NATASHA', text: 'THAT WASN\'T YOU. IT WAS THEIR PROGRAMMING.' },
+                { speaker: 'OLGA', text: 'THE DIRECTOR... HE\'S ESCAPING. SUB-LEVEL 3.' },
+                { speaker: 'ANYA', text: 'THEN WE END THIS. TOGETHER.' }
+            ],
+            victory: [
+                { speaker: 'DIRECTOR', text: 'YOU THINK THIS CHANGES ANYTHING? MOCKINGBIRD IS EVERYWHERE.' },
+                { speaker: 'NATASHA', text: 'THEN WE\'LL HUNT THEM ALL.' },
+                { speaker: 'DIRECTOR', text: 'YOU\'LL NEVER—' },
+                { speaker: 'MARIA', text: 'WE ALREADY HAVE.' },
+                { speaker: 'OLGA', text: 'THE FILES ARE PUBLIC. EVERY INTELLIGENCE AGENCY HAS THEM NOW.' },
+                { speaker: 'NATASHA', text: 'YOUR EMPIRE IS FINISHED.' },
+                { speaker: 'SYSTEM', text: 'THE SPARROWS VANISHED INTO THE SHADOWS THAT DAY.' },
+                { speaker: 'SYSTEM', text: 'BUT LEGENDS SAY THEY\'RE STILL OUT THERE...' },
+                { speaker: 'SYSTEM', text: 'WATCHING. WAITING. PROTECTING.' }
+            ]
+        };
+        
+        // Input
+        const keys = {};
+        const keyJustPressed = {};
+        let prevKeys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            const prevent = ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                           'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyF',
+                           'Tab', 'ShiftLeft', 'ControlLeft', 'Escape'];
+            if (prevent.includes(e.code)) e.preventDefault();
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        function updateInput() {
+            for (let key in keys) {
+                keyJustPressed[key] = keys[key] && !prevKeys[key];
+            }
+            prevKeys = { ...keys };
+        }
+        
+        // Audio System
+        let audioCtx = null;
+        
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        function playSound(freq, duration, type = 'sine', volume = 0.08, delay = 0) {
+            if (!audioCtx) return;
+            setTimeout(() => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                const filter = audioCtx.createBiquadFilter();
+                
+                osc.type = type;
+                osc.frequency.value = freq;
+                filter.type = 'lowpass';
+                filter.frequency.value = 2000;
+                
+                gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            }, delay);
+        }
+        
+        const SFX = {
+            footstep: () => playSound(80 + Math.random() * 40, 0.05, 'square', 0.02),
+            takedown: () => {
+                playSound(120, 0.1, 'sawtooth', 0.1);
+                playSound(80, 0.15, 'square', 0.08, 50);
+            },
+            gunshot: () => {
+                playSound(150, 0.1, 'sawtooth', 0.15);
+                playSound(60, 0.2, 'square', 0.1, 30);
+            },
+            silenced: () => playSound(200, 0.08, 'sine', 0.06),
+            alert: () => {
+                playSound(800, 0.15, 'square', 0.12);
+                playSound(600, 0.15, 'square', 0.1, 150);
+                playSound(800, 0.2, 'square', 0.12, 300);
+            },
+            caution: () => playSound(400, 0.4, 'sine', 0.08),
+            detect: () => {
+                playSound(600, 0.1, 'square', 0.1);
+                playSound(900, 0.15, 'square', 0.08, 100);
+            },
+            pickup: () => {
+                playSound(880, 0.1, 'sine', 0.1);
+                playSound(1100, 0.12, 'sine', 0.08, 80);
+            },
+            hack: () => {
+                for (let i = 0; i < 5; i++) {
+                    playSound(400 + i * 100, 0.05, 'square', 0.05, i * 50);
+                }
+            },
+            hurt: () => {
+                playSound(150, 0.2, 'sawtooth', 0.12);
+                playSound(100, 0.25, 'square', 0.1, 50);
+            },
+            objective: () => {
+                [523, 659, 784].forEach((f, i) => playSound(f, 0.2, 'sine', 0.1, i * 120));
+            },
+            visionSwitch: () => playSound(1200, 0.1, 'sine', 0.08),
+            coverEnter: () => playSound(200, 0.08, 'square', 0.05),
+            ability: () => {
+                [600, 800, 1000, 1200].forEach((f, i) => playSound(f, 0.15, 'sine', 0.08, i * 60));
+            },
+            comm: () => playSound(1000, 0.03, 'sine', 0.05),
+            commOpen: () => {
+                playSound(600, 0.1, 'sine', 0.08);
+                playSound(900, 0.1, 'sine', 0.06, 100);
+            },
+            select: () => playSound(500, 0.08, 'sine', 0.06),
+            confirm: () => {
+                playSound(600, 0.1, 'sine', 0.08);
+                playSound(800, 0.15, 'sine', 0.06, 100);
+            },
+            missionComplete: () => {
+                [523, 659, 784, 1047].forEach((f, i) => playSound(f, 0.25, 'sine', 0.1, i * 150));
+            },
+            gameOver: () => {
+                [400, 350, 300, 250].forEach((f, i) => playSound(f, 0.3, 'sine', 0.1, i * 200));
+            }
+        };
+        
+        // Game Functions
+        function startMission(index) {
+            initAudio();
+            currentMission = index;
+            mission = MISSIONS[index];
+            objectivesComplete = new Array(mission.objectives.length).fill(false);
+            
+            // Reset entities
+            walls = [];
+            coverPoints = [];
+            guards = [];
+            cameras = [];
+            lights = [];
+            items = [];
+            doors = [];
+            terminals = [];
+            triggers = [];
+            projectiles = [];
+            particles = [];
+            bodies = [];
+            
+            // Reset player
+            player.x = 60;
+            player.y = mission.height - 60;
+            player.health = player.maxHealth;
+            player.armor = player.maxArmor;
+            player.abilityCharge = player.maxAbilityCharge;
+            player.detected = false;
+            player.crouching = false;
+            player.inCover = false;
+            player.abilityActive = false;
+            
+            // Reset alert
+            alertLevel = ALERT.STEALTH;
+            alertTimer = 0;
+            visionMode = VISION.NORMAL;
+            
+            // Generate level
+            generateLevel(index);
+            
+            // Start dialogue
+            const dialogueKey = index === 0 ? 'intro' : 
+                               index === 1 ? 'mission2_start' : 'mission3_start';
+            startComms(DIALOGUES[dialogueKey]);
+            
+            gameState = STATE.PLAYING;
+        }
+        
+        function generateLevel(index) {
+            const m = mission;
+            
+            // Border walls
+            walls.push({ x: 0, y: 0, w: m.width, h: 12, type: 'wall' });
+            walls.push({ x: 0, y: m.height - 12, w: m.width, h: 12, type: 'wall' });
+            walls.push({ x: 0, y: 0, w: 12, h: m.height, type: 'wall' });
+            walls.push({ x: m.width - 12, y: 0, w: 12, h: m.height, type: 'wall' });
+            
+            if (index === 0) {
+                // Mission 1: Safehouse
+                // Interior structure
+                walls.push({ x: 150, y: 0, w: 12, h: 200, type: 'wall' });
+                walls.push({ x: 150, y: 280, w: 12, h: 170, type: 'wall' });
+                walls.push({ x: 300, y: 100, w: 12, h: 250, type: 'wall' });
+                walls.push({ x: 300, y: 400, w: 12, h: 50, type: 'wall' });
+                walls.push({ x: 450, y: 0, w: 12, h: 180, type: 'wall' });
+                walls.push({ x: 450, y: 260, w: 12, h: 190, type: 'wall' });
+                walls.push({ x: 150, y: 200, w: 150, h: 12, type: 'wall' });
+                walls.push({ x: 300, y: 350, w: 150, h: 12, type: 'wall' });
+                
+                // Doors
+                doors.push({ x: 150, y: 200, w: 12, h: 80, open: false, locked: false });
+                doors.push({ x: 300, y: 350, w: 12, h: 50, open: false, locked: true, keyId: 'safe_key' });
+                doors.push({ x: 450, y: 180, w: 12, h: 80, open: false, locked: false });
+                
+                // Cover points
+                coverPoints.push({ x: 100, y: 150, w: 30, h: 20, dir: 'right' });
+                coverPoints.push({ x: 220, y: 280, w: 30, h: 20, dir: 'left' });
+                coverPoints.push({ x: 380, y: 200, w: 30, h: 20, dir: 'right' });
+                coverPoints.push({ x: 500, y: 350, w: 30, h: 20, dir: 'left' });
+                
+                // Lights
+                lights.push({ x: 80, y: 100, radius: 80, intensity: 0.8 });
+                lights.push({ x: 230, y: 150, radius: 70, intensity: 0.6 });
+                lights.push({ x: 380, y: 250, radius: 90, intensity: 0.7 });
+                lights.push({ x: 520, y: 150, radius: 80, intensity: 0.8 });
+                lights.push({ x: 520, y: 380, radius: 100, intensity: 0.9 });
+                
+                // Guards
+                guards.push(createGuard(200, 300, 0, 'patrol', [{ x: 200, y: 300 }, { x: 200, y: 150 }]));
+                guards.push(createGuard(350, 200, Math.PI, 'stationary'));
+                guards.push(createGuard(500, 250, Math.PI / 2, 'patrol', [{ x: 500, y: 250 }, { x: 500, y: 100 }]));
+                guards.push(createGuard(400, 400, 0, 'patrol', [{ x: 400, y: 400 }, { x: 550, y: 400 }]));
+                
+                // Cameras
+                cameras.push({ x: 160, y: 20, angle: Math.PI / 2, range: 100, fov: Math.PI / 3, sweep: Math.PI / 3 });
+                cameras.push({ x: 440, y: 20, angle: Math.PI / 2, range: 100, fov: Math.PI / 3, sweep: Math.PI / 4 });
+                cameras.push({ x: 580, y: 300, angle: Math.PI, range: 90, fov: Math.PI / 4, sweep: Math.PI / 4 });
+                
+                // Items
+                items.push({ x: 250, y: 120, type: 'keycard', id: 'safe_key' });
+                items.push({ x: 100, y: 380, type: 'ammo' });
+                items.push({ x: 520, y: 80, type: 'health' });
+                
+                // Terminals
+                terminals.push({ x: 520, y: 400, w: 24, h: 24, id: 'documents', hacked: false });
+                terminals.push({ x: 400, y: 50, w: 24, h: 24, id: 'comms', hacked: false });
+                
+                // Triggers
+                triggers.push({ x: 12, y: m.height - 100, w: 40, h: 80, objective: 0, triggered: false }); // Entry
+                triggers.push({ x: 520, y: 400, w: 24, h: 24, objective: 1, triggered: false, requiresHack: true, terminalId: 'documents' });
+                triggers.push({ x: 400, y: 50, w: 24, h: 24, objective: 2, triggered: false, requiresHack: true, terminalId: 'comms' });
+                triggers.push({ x: 12, y: m.height - 100, w: 40, h: 80, objective: 3, triggered: false, requiresAll: true });
+                
+            } else if (index === 1) {
+                // Mission 2: Black Site
+                walls.push({ x: 180, y: 0, w: 12, h: 180, type: 'wall' });
+                walls.push({ x: 180, y: 260, w: 12, h: 240, type: 'wall' });
+                walls.push({ x: 350, y: 100, w: 12, h: 300, type: 'wall' });
+                walls.push({ x: 350, y: 450, w: 12, h: 50, type: 'wall' });
+                walls.push({ x: 500, y: 0, w: 12, h: 220, type: 'wall' });
+                walls.push({ x: 500, y: 300, w: 12, h: 200, type: 'wall' });
+                walls.push({ x: 180, y: 180, w: 170, h: 12, type: 'wall' });
+                walls.push({ x: 350, y: 400, w: 150, h: 12, type: 'wall' });
+                walls.push({ x: 500, y: 220, w: 100, h: 12, type: 'wall' });
+                
+                doors.push({ x: 180, y: 180, w: 12, h: 80, open: false, locked: true, keyId: 'level1' });
+                doors.push({ x: 350, y: 400, w: 12, h: 50, open: false, locked: true, keyId: 'level2' });
+                doors.push({ x: 500, y: 220, w: 12, h: 80, open: false, locked: true, keyId: 'archive' });
+                
+                coverPoints.push({ x: 100, y: 200, w: 30, h: 20, dir: 'right' });
+                coverPoints.push({ x: 260, y: 350, w: 30, h: 20, dir: 'left' });
+                coverPoints.push({ x: 420, y: 150, w: 30, h: 20, dir: 'right' });
+                coverPoints.push({ x: 600, y: 350, w: 30, h: 20, dir: 'left' });
+                
+                lights.push({ x: 100, y: 120, radius: 70, intensity: 0.5 });
+                lights.push({ x: 260, y: 300, radius: 80, intensity: 0.6 });
+                lights.push({ x: 420, y: 200, radius: 90, intensity: 0.7 });
+                lights.push({ x: 600, y: 150, radius: 100, intensity: 0.8 });
+                lights.push({ x: 600, y: 420, radius: 80, intensity: 0.9 });
+                
+                guards.push(createGuard(100, 300, 0, 'patrol', [{ x: 100, y: 300 }, { x: 100, y: 120 }]));
+                guards.push(createGuard(260, 150, Math.PI / 2, 'stationary'));
+                guards.push(createGuard(420, 350, Math.PI, 'patrol', [{ x: 420, y: 350 }, { x: 420, y: 200 }]));
+                guards.push(createGuard(550, 250, -Math.PI / 2, 'patrol', [{ x: 550, y: 250 }, { x: 650, y: 250 }]));
+                guards.push(createGuard(600, 450, Math.PI, 'stationary'));
+                
+                cameras.push({ x: 190, y: 20, angle: Math.PI / 2, range: 120, fov: Math.PI / 3, sweep: Math.PI / 3 });
+                cameras.push({ x: 490, y: 20, angle: Math.PI / 2, range: 110, fov: Math.PI / 3, sweep: Math.PI / 4 });
+                cameras.push({ x: 680, y: 250, angle: Math.PI, range: 100, fov: Math.PI / 4, sweep: Math.PI / 4 });
+                cameras.push({ x: 360, y: 480, angle: -Math.PI / 2, range: 90, fov: Math.PI / 4, sweep: Math.PI / 4 });
+                
+                items.push({ x: 150, y: 80, type: 'keycard', id: 'level1' });
+                items.push({ x: 300, y: 300, type: 'keycard', id: 'level2' });
+                items.push({ x: 450, y: 80, type: 'keycard', id: 'archive' });
+                items.push({ x: 650, y: 80, type: 'health' });
+                items.push({ x: 260, y: 450, type: 'armor' });
+                
+                terminals.push({ x: 620, y: 400, w: 24, h: 24, id: 'mainframe', hacked: false });
+                
+                triggers.push({ x: 12, y: m.height - 100, w: 40, h: 80, objective: 0, triggered: false });
+                triggers.push({ x: 580, y: 350, w: 80, h: 80, objective: 1, triggered: false });
+                triggers.push({ x: 620, y: 400, w: 24, h: 24, objective: 2, triggered: false, requiresHack: true, terminalId: 'mainframe' });
+                triggers.push({ x: 12, y: m.height - 100, w: 40, h: 80, objective: 3, triggered: false, requiresAll: true, noAlert: true });
+                
+            } else if (index === 2) {
+                // Mission 3: Directorate HQ
+                walls.push({ x: 200, y: 0, w: 12, h: 200, type: 'wall' });
+                walls.push({ x: 200, y: 280, w: 12, h: 270, type: 'wall' });
+                walls.push({ x: 400, y: 100, w: 12, h: 200, type: 'wall' });
+                walls.push({ x: 400, y: 380, w: 12, h: 170, type: 'wall' });
+                walls.push({ x: 600, y: 0, w: 12, h: 250, type: 'wall' });
+                walls.push({ x: 600, y: 330, w: 12, h: 220, type: 'wall' });
+                walls.push({ x: 200, y: 200, w: 200, h: 12, type: 'wall' });
+                walls.push({ x: 400, y: 300, w: 200, h: 12, type: 'wall' });
+                walls.push({ x: 600, y: 250, w: 100, h: 12, type: 'wall' });
+                walls.push({ x: 700, y: 150, w: 12, h: 100, type: 'wall' });
+                walls.push({ x: 700, y: 330, w: 12, h: 120, type: 'wall' });
+                
+                doors.push({ x: 200, y: 200, w: 12, h: 80, open: false, locked: true, keyId: 'hq1' });
+                doors.push({ x: 400, y: 300, w: 12, h: 80, open: false, locked: true, keyId: 'hq2' });
+                doors.push({ x: 600, y: 250, w: 12, h: 80, open: false, locked: true, keyId: 'director' });
+                doors.push({ x: 700, y: 250, w: 12, h: 80, open: false, locked: true, keyId: 'cell' });
+                
+                coverPoints.push({ x: 120, y: 200, w: 30, h: 20, dir: 'right' });
+                coverPoints.push({ x: 300, y: 350, w: 30, h: 20, dir: 'left' });
+                coverPoints.push({ x: 500, y: 180, w: 30, h: 20, dir: 'right' });
+                coverPoints.push({ x: 650, y: 400, w: 30, h: 20, dir: 'left' });
+                coverPoints.push({ x: 750, y: 250, w: 30, h: 20, dir: 'left' });
+                
+                lights.push({ x: 100, y: 150, radius: 80, intensity: 0.6 });
+                lights.push({ x: 300, y: 300, radius: 90, intensity: 0.7 });
+                lights.push({ x: 500, y: 200, radius: 100, intensity: 0.8 });
+                lights.push({ x: 500, y: 450, radius: 80, intensity: 0.6 });
+                lights.push({ x: 700, y: 100, radius: 90, intensity: 0.9 });
+                lights.push({ x: 750, y: 400, radius: 70, intensity: 0.5 });
+                
+                guards.push(createGuard(150, 350, 0, 'patrol', [{ x: 150, y: 350 }, { x: 150, y: 150 }]));
+                guards.push(createGuard(300, 150, Math.PI / 2, 'stationary'));
+                guards.push(createGuard(300, 450, 0, 'patrol', [{ x: 300, y: 450 }, { x: 300, y: 350 }]));
+                guards.push(createGuard(500, 350, Math.PI, 'patrol', [{ x: 500, y: 350 }, { x: 500, y: 250 }]));
+                guards.push(createGuard(650, 200, -Math.PI / 2, 'stationary'));
+                guards.push(createGuard(700, 450, Math.PI, 'patrol', [{ x: 700, y: 450 }, { x: 700, y: 350 }]));
+                guards.push(createGuard(750, 80, Math.PI / 2, 'stationary', null, true)); // Elite
+                
+                cameras.push({ x: 210, y: 20, angle: Math.PI / 2, range: 130, fov: Math.PI / 3, sweep: Math.PI / 3 });
+                cameras.push({ x: 590, y: 20, angle: Math.PI / 2, range: 120, fov: Math.PI / 3, sweep: Math.PI / 4 });
+                cameras.push({ x: 780, y: 200, angle: Math.PI, range: 100, fov: Math.PI / 4, sweep: Math.PI / 4 });
+                cameras.push({ x: 410, y: 530, angle: -Math.PI / 2, range: 110, fov: Math.PI / 4, sweep: Math.PI / 3 });
+                
+                items.push({ x: 100, y: 80, type: 'keycard', id: 'hq1' });
+                items.push({ x: 350, y: 250, type: 'keycard', id: 'hq2' });
+                items.push({ x: 550, y: 400, type: 'keycard', id: 'director' });
+                items.push({ x: 650, y: 100, type: 'keycard', id: 'cell' });
+                items.push({ x: 180, y: 450, type: 'health' });
+                items.push({ x: 450, y: 80, type: 'armor' });
+                items.push({ x: 750, y: 500, type: 'ammo' });
+                
+                terminals.push({ x: 650, y: 150, w: 24, h: 24, id: 'comms_hq', hacked: false });
+                
+                // Special trigger for Olga
+                triggers.push({ x: 12, y: m.height - 100, w: 40, h: 80, objective: 0, triggered: false });
+                triggers.push({ x: 650, y: 150, w: 24, h: 24, objective: 1, triggered: false, requiresHack: true, terminalId: 'comms_hq' });
+                triggers.push({ x: 700, y: 60, w: 60, h: 60, objective: 2, triggered: false, dialogue: 'olga_found' });
+                triggers.push({ x: 740, y: 350, w: 40, h: 80, objective: 3, triggered: false, requiresAll: true, isVictory: true });
+            }
+        }
+        
+        function createGuard(x, y, angle, behavior, patrol = null, elite = false) {
+            return {
+                x, y, angle,
+                behavior,
+                patrol,
+                patrolIndex: 0,
+                patrolDir: 1,
+                elite,
+                speed: elite ? 1.8 : 1.2,
+                viewDist: elite ? 120 : 90,
+                viewAngle: Math.PI / 3,
+                state: 'patrol',
+                alertTimer: 0,
+                lastKnownX: 0,
+                lastKnownY: 0,
+                searchTimer: 0,
+                attackCooldown: 0,
+                health: elite ? 60 : 40,
+                maxHealth: elite ? 60 : 40,
+                alive: true,
+                stunned: false,
+                stunnedTimer: 0
+            };
+        }
+        
+        function startComms(dialogue) {
+            commsQueue = [...dialogue];
+            nextComm();
+        }
+        
+        function nextComm() {
+            if (commsQueue.length === 0) {
+                currentComm = null;
+                return;
+            }
+            currentComm = commsQueue.shift();
+            commText = '';
+            commCharIndex = 0;
+            commTimer = 0;
+            SFX.commOpen();
+        }
+        
+        // Main Update
+        function update() {
+            updateInput();
+            globalTimer++;
+            stateTimer++;
+            
+            switch (gameState) {
+                case STATE.TITLE:
+                    if (keyJustPressed['Space'] || keyJustPressed['Enter']) {
+                        gameState = STATE.SELECT;
+                        stateTimer = 0;
+                        SFX.confirm();
+                    }
+                    break;
+                    
+                case STATE.SELECT:
+                    updateSelect();
+                    break;
+                    
+                case STATE.PLAYING:
+                    updateGameplay();
+                    updateComms();
+                    break;
+                    
+                case STATE.PAUSED:
+                    if (keyJustPressed['Escape']) {
+                        gameState = STATE.PLAYING;
+                    }
+                    break;
+                    
+                case STATE.OBJECTIVES:
+                    if (keyJustPressed['Tab'] || keyJustPressed['Escape']) {
+                        gameState = STATE.PLAYING;
+                    }
+                    break;
+                    
+                case STATE.GAME_OVER:
+                    if (stateTimer > 180 && (keyJustPressed['Space'] || keyJustPressed['Enter'])) {
+                        gameState = STATE.TITLE;
+                        stateTimer = 0;
+                    }
+                    break;
+                    
+                case STATE.MISSION_COMPLETE:
+                    if (stateTimer > 150 && (keyJustPressed['Space'] || keyJustPressed['Enter'])) {
+                        if (currentMission >= MISSIONS.length - 1) {
+                            startComms(DIALOGUES.victory);
+                            gameState = STATE.VICTORY;
+                            stateTimer = 0;
+                        } else {
+                            startMission(currentMission + 1);
+                        }
+                    }
+                    break;
+                    
+                case STATE.VICTORY:
+                    updateComms();
+                    if (!currentComm && stateTimer > 200 && (keyJustPressed['Space'] || keyJustPressed['Enter'])) {
+                        gameState = STATE.TITLE;
+                        stateTimer = 0;
+                    }
+                    break;
+            }
+        }
+        
+        function updateSelect() {
+            if (keyJustPressed['ArrowLeft'] || keyJustPressed['KeyA']) {
+                do {
+                    player.charIndex = (player.charIndex + 3) % 4;
+                } while (CHARACTERS[player.charIndex].locked);
+                SFX.select();
+            }
+            if (keyJustPressed['ArrowRight'] || keyJustPressed['KeyD']) {
+                do {
+                    player.charIndex = (player.charIndex + 1) % 4;
+                } while (CHARACTERS[player.charIndex].locked);
+                SFX.select();
+            }
+            if (keyJustPressed['Space'] || keyJustPressed['Enter']) {
+                startMission(0);
+                SFX.confirm();
+            }
+        }
+        
+        function updateComms() {
+            if (!currentComm) return;
+            
+            commTimer++;
+            if (commCharIndex < currentComm.text.length) {
+                if (commTimer % 2 === 0) {
+                    commText += currentComm.text[commCharIndex];
+                    commCharIndex++;
+                    if (commCharIndex % 3 === 0) SFX.comm();
+                }
+            }
+            
+            if (keyJustPressed['Space'] || keyJustPressed['Enter']) {
+                if (commCharIndex < currentComm.text.length) {
+                    commText = currentComm.text;
+                    commCharIndex = currentComm.text.length;
+                } else {
+                    nextComm();
+                }
+            }
+        }
+        
+        function updateGameplay() {
+            // Pause
+            if (keyJustPressed['Escape']) {
+                gameState = STATE.PAUSED;
+                return;
+            }
+            
+            // Objectives view
+            if (keyJustPressed['Tab']) {
+                gameState = STATE.OBJECTIVES;
+                return;
+            }
+            
+            // Vision mode toggle
+            if (keyJustPressed['KeyF']) {
+                visionMode = (visionMode + 1) % 3;
+                SFX.visionSwitch();
+            }
+            
+            const char = CHARACTERS[player.charIndex];
+            
+            // Movement input
+            let dx = 0, dy = 0;
+            if (keys['KeyW'] || keys['ArrowUp']) dy = -1;
+            if (keys['KeyS'] || keys['ArrowDown']) dy = 1;
+            if (keys['KeyA'] || keys['ArrowLeft']) dx = -1;
+            if (keys['KeyD'] || keys['ArrowRight']) dx = 1;
+            
+            // Normalize diagonal
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.707;
+                dy *= 0.707;
+            }
+            
+            // States
+            player.running = (keys['ShiftLeft'] || keys['ShiftRight']) && !player.crouching;
+            
+            if (keyJustPressed['ControlLeft'] || keyJustPressed['ControlRight']) {
+                player.crouching = !player.crouching;
+                if (player.crouching) player.running = false;
+            }
+            
+            // Speed calculation
+            let speed = player.maxWalkSpeed;
+            if (player.running) speed = player.maxRunSpeed;
+            if (player.crouching) speed = player.crouchSpeed;
+            if (player.inCover) speed = player.crouchSpeed;
+            
+            // Movement
+            player.moving = (dx !== 0 || dy !== 0);
+            
+            if (!player.inCover && player.moving) {
+                const newX = player.x + dx * speed;
+                const newY = player.y + dy * speed;
+                
+                if (!checkCollision(newX, player.y, player.width, player.height)) {
+                    player.x = newX;
+                }
+                if (!checkCollision(player.x, newY, player.width, player.height)) {
+                    player.y = newY;
+                }
+                
+                player.angle = Math.atan2(dy, dx);
+                
+                // Footsteps
+                if (globalTimer % (player.running ? 8 : 15) === 0) {
+                    if (!player.crouching) SFX.footstep();
+                }
+            }
+            
+            // Cover system
+            if (keyJustPressed['Space']) {
+                if (player.inCover) {
+                    player.inCover = false;
+                    player.coverWall = null;
+                } else {
+                    // Check for nearby cover
+                    for (let cover of coverPoints) {
+                        if (distance(player.x, player.y, cover.x + cover.w/2, cover.y + cover.h/2) < 40) {
+                            player.inCover = true;
+                            player.coverWall = cover;
+                            player.x = cover.x + cover.w/2;
+                            player.y = cover.y + cover.h/2;
+                            SFX.coverEnter();
+                            break;
+                        }
+                    }
+                    
+                    // Or interact with doors/terminals
+                    if (!player.inCover) {
+                        // Doors
+                        for (let door of doors) {
+                            if (distance(player.x, player.y, door.x + door.w/2, door.y + door.h/2) < 30) {
+                                if (door.locked) {
+                                    const hasKey = items.some(i => i.collected && i.type === 'keycard' && i.id === door.keyId);
+                                    if (hasKey) {
+                                        door.locked = false;
+                                        door.open = true;
+                                        SFX.confirm();
+                                    }
+                                } else {
+                                    door.open = !door.open;
+                                    SFX.select();
+                                }
+                                break;
+                            }
+                        }
+                        
+                        // Terminals
+                        for (let term of terminals) {
+                            if (!term.hacked && distance(player.x, player.y, term.x + term.w/2, term.y + term.h/2) < 30) {
+                                term.hacked = true;
+                                SFX.hack();
+                                spawnParticles(term.x + term.w/2, term.y + term.h/2, COLORS.green, 15);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Takedown
+            if (keyJustPressed['KeyE']) {
+                for (let guard of guards) {
+                    if (guard.alive && !guard.stunned && distance(player.x, player.y, guard.x, guard.y) < 25) {
+                        const angleToPlayer = Math.atan2(player.y - guard.y, player.x - guard.x);
+                        const angleDiff = Math.abs(normalizeAngle(angleToPlayer - guard.angle));
+                        
+                        // Behind or crouched
+                        if (angleDiff > Math.PI / 2 || player.crouching) {
+                            guard.alive = false;
+                            guard.stunned = true;
+                            SFX.takedown();
+                            spawnParticles(guard.x, guard.y, COLORS.red, 10);
+                            bodies.push({ x: guard.x, y: guard.y, angle: guard.angle });
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Ability
+            if (keyJustPressed['KeyQ'] && player.abilityCharge >= 30) {
+                useAbility(char);
+            }
+            
+            // Update ability
+            if (player.abilityActive) {
+                player.abilityTimer--;
+                if (player.abilityTimer <= 0) {
+                    player.abilityActive = false;
+                }
+            }
+            
+            // Recharge ability
+            if (player.abilityCharge < player.maxAbilityCharge && !player.abilityActive) {
+                player.abilityCharge += 0.1;
+            }
+            
+            // Visibility calculation
+            player.visibility = calculateVisibility();
+            player.noise = calculateNoise();
+            
+            // Collect items
+            items.forEach(item => {
+                if (!item.collected && distance(player.x, player.y, item.x, item.y) < 20) {
+                    item.collected = true;
+                    SFX.pickup();
+                    
+                    if (item.type === 'health') {
+                        player.health = Math.min(player.maxHealth, player.health + 40);
+                    } else if (item.type === 'armor') {
+                        player.armor = Math.min(player.maxArmor, player.armor + 30);
+                    } else if (item.type === 'ammo') {
+                        player.abilityCharge = Math.min(player.maxAbilityCharge, player.abilityCharge + 50);
+                    }
+                    
+                    spawnParticles(item.x, item.y, COLORS.brightGreen, 8);
+                }
+            });
+            
+            // Check triggers
+            triggers.forEach(trigger => {
+                if (trigger.triggered) return;
+                
+                if (player.x > trigger.x && player.x < trigger.x + trigger.w &&
+                    player.y > trigger.y && player.y < trigger.y + trigger.h) {
+                    
+                    if (trigger.requiresHack) {
+                        const term = terminals.find(t => t.id === trigger.terminalId);
+                        if (!term || !term.hacked) return;
+                    }
+                    
+                    if (trigger.requiresAll) {
+                        const allDone = objectivesComplete.slice(0, -1).every(c => c);
+                        if (!allDone) return;
+                        if (trigger.noAlert && alertLevel >= ALERT.ALERT) return;
+                    }
+                    
+                    trigger.triggered = true;
+                    objectivesComplete[trigger.objective] = true;
+                    SFX.objective();
+                    
+                    if (trigger.dialogue) {
+                        startComms(DIALOGUES[trigger.dialogue]);
+                    }
+                    
+                    // Check mission complete
+                    if (objectivesComplete.every(c => c)) {
+                        if (trigger.isVictory) {
+                            startComms(DIALOGUES.victory);
+                            gameState = STATE.VICTORY;
+                            stateTimer = 0;
+                            SFX.missionComplete();
+                        } else {
+                            gameState = STATE.MISSION_COMPLETE;
+                            stateTimer = 0;
+                            SFX.missionComplete();
+                        }
+                    }
+                }
+            });
+            
+            // Update guards
+            updateGuards();
+            
+            // Update cameras
+            updateCameras();
+            
+            // Update alert
+            updateAlert();
+            
+            // Update projectiles
+            updateProjectiles();
+            
+            // Update particles
+            updateParticles();
+            
+            // Camera follow
+            const targetX = player.x - NATIVE_WIDTH / 2;
+            const targetY = player.y - NATIVE_HEIGHT / 2;
+            camX += (targetX - camX) * 0.08;
+            camY += (targetY - camY) * 0.08;
+            
+            // Camera shake
+            if (camShake > 0) {
+                camShake *= 0.9;
+            }
+            
+            // Clamp
+            camX = Math.max(0, Math.min(mission.width - NATIVE_WIDTH, camX));
+            camY = Math.max(0, Math.min(mission.height - NATIVE_HEIGHT, camY));
+            
+            // Animation
+            player.animTimer++;
+            if (player.animTimer > 6) {
+                player.animTimer = 0;
+                player.animFrame = (player.animFrame + 1) % 4;
+            }
+            
+            // Invincibility
+            if (player.invincible) {
+                player.invincibleTimer--;
+                if (player.invincibleTimer <= 0) {
+                    player.invincible = false;
+                }
+            }
+        }
+        
+        function useAbility(char) {
+            player.abilityCharge -= 30;
+            player.abilityActive = true;
+            player.abilityTimer = 180;
+            SFX.ability();
+            
+            if (char.codename === 'CIPHER') {
+                // System Breach - disable all electronics
+                cameras.forEach(cam => {
+                    cam.disabled = true;
+                    cam.disabledTimer = 300;
+                });
+                spawnParticles(player.x, player.y, COLORS.cyan, 30);
+                
+            } else if (char.codename === 'VENOM') {
+                // Ghost Strike - mark nearby guards for chain takedown
+                guards.forEach(guard => {
+                    if (guard.alive && distance(player.x, player.y, guard.x, guard.y) < 100) {
+                        guard.marked = true;
+                        guard.markedTimer = 300;
+                    }
+                });
+                spawnParticles(player.x, player.y, COLORS.brightGreen, 25);
+                
+            } else if (char.codename === 'HAWK') {
+                // Dead Eye - slow time effect (visual only in this version)
+                player.abilityTimer = 240;
+                // Stun visible guards briefly
+                guards.forEach(guard => {
+                    if (guard.alive && canSeePoint(player.x, player.y, guard.x, guard.y)) {
+                        guard.stunned = true;
+                        guard.stunnedTimer = 120;
+                    }
+                });
+                spawnParticles(player.x, player.y, COLORS.orange, 20);
+            }
+        }
+        
+        function calculateVisibility() {
+            let vis = 0.3; // Base visibility
+            
+            // Check if in light
+            lights.forEach(light => {
+                const dist = distance(player.x, player.y, light.x, light.y);
+                if (dist < light.radius) {
+                    vis += light.intensity * (1 - dist / light.radius) * 0.5;
+                }
+            });
+            
+            // Modifiers
+            if (player.crouching) vis *= 0.5;
+            if (player.inCover) vis *= 0.3;
+            if (player.running) vis *= 1.3;
+            
+            return Math.min(1, Math.max(0, vis));
+        }
+        
+        function calculateNoise() {
+            if (!player.moving) return 0;
+            if (player.crouching) return 0.2;
+            if (player.running) return 1.0;
+            return 0.5;
+        }
+        
+        function updateGuards() {
+            guards.forEach(guard => {
+                if (!guard.alive) return;
+                
+                if (guard.stunned) {
+                    guard.stunnedTimer--;
+                    if (guard.stunnedTimer <= 0) {
+                        guard.stunned = false;
+                    }
+                    return;
+                }
+                
+                if (guard.marked) {
+                    guard.markedTimer--;
+                    if (guard.markedTimer <= 0) guard.marked = false;
+                }
+                
+                // Check detection
+                const canSee = canGuardSeePlayer(guard);
+                const canHear = canGuardHearPlayer(guard);
+                
+                if (canSee || canHear) {
+                    guard.lastKnownX = player.x;
+                    guard.lastKnownY = player.y;
+                    
+                    if (guard.state === 'patrol') {
+                        guard.state = 'suspicious';
+                        guard.alertTimer = 90;
+                        if (alertLevel < ALERT.SUSPICIOUS) {
+                            setAlert(ALERT.SUSPICIOUS);
+                        }
+                    } else if (guard.state === 'suspicious' && canSee) {
+                        guard.alertTimer--;
+                        if (guard.alertTimer <= 0) {
+                            guard.state = 'combat';
+                            setAlert(ALERT.COMBAT);
+                            player.detected = true;
+                        }
+                    }
+                }
+                
+                // State machine
+                switch (guard.state) {
+                    case 'patrol':
+                        if (guard.behavior === 'patrol' && guard.patrol) {
+                            const target = guard.patrol[guard.patrolIndex];
+                            const dist = distance(guard.x, guard.y, target.x, target.y);
+                            
+                            if (dist < 5) {
+                                guard.patrolIndex += guard.patrolDir;
+                                if (guard.patrolIndex >= guard.patrol.length || guard.patrolIndex < 0) {
+                                    guard.patrolDir *= -1;
+                                    guard.patrolIndex += guard.patrolDir * 2;
+                                }
+                            } else {
+                                const angle = Math.atan2(target.y - guard.y, target.x - guard.x);
+                                guard.x += Math.cos(angle) * guard.speed * 0.5;
+                                guard.y += Math.sin(angle) * guard.speed * 0.5;
+                                guard.angle = angle;
+                            }
+                        }
+                        break;
+                        
+                    case 'suspicious':
+                        // Turn towards last known position
+                        const suspAngle = Math.atan2(guard.lastKnownY - guard.y, guard.lastKnownX - guard.x);
+                        guard.angle = lerpAngle(guard.angle, suspAngle, 0.05);
+                        
+                        if (!canSee && !canHear) {
+                            guard.alertTimer--;
+                            if (guard.alertTimer <= 0) {
+                                guard.state = 'search';
+                                guard.searchTimer = 300;
+                            }
+                        }
+                        break;
+                        
+                    case 'search':
+                        guard.searchTimer--;
+                        
+                        // Move to last known
+                        const searchDist = distance(guard.x, guard.y, guard.lastKnownX, guard.lastKnownY);
+                        if (searchDist > 20) {
+                            const angle = Math.atan2(guard.lastKnownY - guard.y, guard.lastKnownX - guard.x);
+                            guard.x += Math.cos(angle) * guard.speed * 0.7;
+                            guard.y += Math.sin(angle) * guard.speed * 0.7;
+                            guard.angle = angle;
+                        } else {
+                            guard.angle += 0.03; // Look around
+                        }
+                        
+                        if (guard.searchTimer <= 0) {
+                            guard.state = 'patrol';
+                            if (alertLevel === ALERT.CAUTION) {
+                                setAlert(ALERT.SUSPICIOUS);
+                            }
+                        }
+                        break;
+                        
+                    case 'combat':
+                        // Chase and attack
+                        const combatAngle = Math.atan2(player.y - guard.y, player.x - guard.x);
+                        guard.angle = lerpAngle(guard.angle, combatAngle, 0.1);
+                        
+                        const combatDist = distance(guard.x, guard.y, player.x, player.y);
+                        if (combatDist > 50) {
+                            guard.x += Math.cos(guard.angle) * guard.speed * 1.2;
+                            guard.y += Math.sin(guard.angle) * guard.speed * 1.2;
+                        }
+                        
+                        // Attack
+                        guard.attackCooldown--;
+                        if (guard.attackCooldown <= 0 && combatDist < 150 && canSee) {
+                            // Shoot
+                            projectiles.push({
+                                x: guard.x,
+                                y: guard.y,
+                                vx: Math.cos(guard.angle) * 6,
+                                vy: Math.sin(guard.angle) * 6,
+                                type: 'bullet',
+                                owner: 'enemy',
+                                damage: guard.elite ? 20 : 12
+                            });
+                            guard.attackCooldown = guard.elite ? 40 : 60;
+                            SFX.gunshot();
+                        }
+                        
+                        if (!canSee) {
+                            guard.state = 'search';
+                            guard.searchTimer = 300;
+                        }
+                        break;
+                }
+                
+                // Wall collision for guards
+                if (checkCollision(guard.x, guard.y, 12, 12)) {
+                    // Push back
+                    guard.x -= Math.cos(guard.angle) * guard.speed;
+                    guard.y -= Math.sin(guard.angle) * guard.speed;
+                }
+            });
+        }
+        
+        function canGuardSeePlayer(guard) {
+            const dist = distance(guard.x, guard.y, player.x, player.y);
+            const adjustedViewDist = guard.viewDist * (1 + player.visibility * 0.5);
+            
+            if (dist > adjustedViewDist) return false;
+            
+            const angleToPlayer = Math.atan2(player.y - guard.y, player.x - guard.x);
+            const angleDiff = Math.abs(normalizeAngle(angleToPlayer - guard.angle));
+            
+            if (angleDiff > guard.viewAngle / 2) return false;
+            if (!canSeePoint(guard.x, guard.y, player.x, player.y)) return false;
+            
+            // Visibility check
+            if (player.visibility < 0.3 && dist > 40) return false;
+            
+            return true;
+        }
+        
+        function canGuardHearPlayer(guard) {
+            if (player.noise < 0.3) return false;
+            const hearDist = player.noise * 80;
+            return distance(guard.x, guard.y, player.x, player.y) < hearDist;
+        }
+        
+        function updateCameras() {
+            cameras.forEach(cam => {
+                if (cam.disabled) {
+                    cam.disabledTimer--;
+                    if (cam.disabledTimer <= 0) cam.disabled = false;
+                    return;
+                }
+                
+                // Sweep
+                if (cam.sweep) {
+                    cam.sweepAngle = cam.sweepAngle || 0;
+                    cam.sweepDir = cam.sweepDir || 1;
+                    cam.sweepAngle += cam.sweepDir * 0.01;
+                    
+                    if (Math.abs(cam.sweepAngle) > cam.sweep) {
+                        cam.sweepDir *= -1;
+                    }
+                    
+                    cam.currentAngle = cam.angle + cam.sweepAngle;
+                } else {
+                    cam.currentAngle = cam.angle;
+                }
+                
+                // Detection
+                const dist = distance(cam.x, cam.y, player.x, player.y);
+                if (dist < cam.range) {
+                    const angleToPlayer = Math.atan2(player.y - cam.y, player.x - cam.x);
+                    const angleDiff = Math.abs(normalizeAngle(angleToPlayer - cam.currentAngle));
+                    
+                    if (angleDiff < cam.fov / 2 && canSeePoint(cam.x, cam.y, player.x, player.y)) {
+                        if (player.visibility > 0.4 || dist < cam.range * 0.3) {
+                            if (alertLevel < ALERT.ALERT) {
+                                setAlert(ALERT.ALERT);
+                                SFX.alert();
+                                
+                                // Alert nearby guards
+                                guards.forEach(g => {
+                                    if (g.alive && distance(g.x, g.y, cam.x, cam.y) < 200) {
+                                        g.state = 'combat';
+                                        g.lastKnownX = player.x;
+                                        g.lastKnownY = player.y;
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function setAlert(level) {
+            if (level > alertLevel) {
+                alertLevel = level;
+                alertTimer = [0, 300, 600, 900, 1200][level];
+                
+                if (level === ALERT.SUSPICIOUS) SFX.caution();
+                else if (level >= ALERT.ALERT) SFX.alert();
+            }
+        }
+        
+        function updateAlert() {
+            if (alertLevel > ALERT.STEALTH) {
+                alertTimer--;
+                
+                if (alertTimer <= 0) {
+                    alertLevel = Math.max(ALERT.STEALTH, alertLevel - 1);
+                    alertTimer = [0, 300, 600, 600, 900][alertLevel];
+                }
+            }
+        }
+        
+        function updateProjectiles() {
+            projectiles = projectiles.filter(proj => {
+                proj.x += proj.vx;
+                proj.y += proj.vy;
+                
+                // Wall collision
+                if (checkCollision(proj.x - 2, proj.y - 2, 4, 4)) {
+                    spawnParticles(proj.x, proj.y, COLORS.orange, 5);
+                    return false;
+                }
+                
+                // Hit player
+                if (proj.owner === 'enemy' && !player.invincible) {
+                    if (distance(proj.x, proj.y, player.x, player.y) < 15) {
+                        hurtPlayer(proj.damage);
+                        return false;
+                    }
+                }
+                
+                // Out of bounds
+                if (proj.x < 0 || proj.x > mission.width || proj.y < 0 || proj.y > mission.height) {
+                    return false;
+                }
+                
+                return true;
+            });
+        }
+        
+        function hurtPlayer(damage) {
+            // Armor absorbs some damage
+            const armorAbsorb = Math.min(player.armor, damage * 0.6);
+            player.armor -= armorAbsorb;
+            player.health -= (damage - armorAbsorb);
+            
+            player.invincible = true;
+            player.invincibleTimer = 30;
+            camShake = 10;
+            SFX.hurt();
+            spawnParticles(player.x, player.y, COLORS.red, 10);
+            
+            if (player.health <= 0) {
+                gameState = STATE.GAME_OVER;
+                stateTimer = 0;
+                SFX.gameOver();
+            }
+        }
+        
+        function checkCollision(x, y, w, h) {
+            for (let wall of walls) {
+                if (x < wall.x + wall.w && x + w > wall.x &&
+                    y < wall.y + wall.h && y + h > wall.y) {
+                    return true;
+                }
+            }
+            for (let door of doors) {
+                if (!door.open) {
+                    if (x < door.x + door.w && x + w > door.x &&
+                        y < door.y + door.h && y + h > door.y) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function canSeePoint(x1, y1, x2, y2) {
+            const steps = Math.ceil(distance(x1, y1, x2, y2) / 8);
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = x1 + (x2 - x1) * t;
+                const y = y1 + (y2 - y1) * t;
+                if (checkCollision(x - 1, y - 1, 2, 2)) return false;
+            }
+            return true;
+        }
+        
+        function spawnParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    color,
+                    life: 30 + Math.random() * 30,
+                    size: 2 + Math.random() * 3
+                });
+            }
+        }
+        
+        function updateParticles() {
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.95;
+                p.vy *= 0.95;
+                p.life--;
+                return p.life > 0;
+            });
+        }
+        
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+        
+        function normalizeAngle(a) {
+            while (a > Math.PI) a -= Math.PI * 2;
+            while (a < -Math.PI) a += Math.PI * 2;
+            return a;
+        }
+        
+        function lerpAngle(a, b, t) {
+            return a + normalizeAngle(b - a) * t;
+        }
+        
+        // Rendering
+        function render() {
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.scale(SCALE, SCALE);
+            ctx.imageSmoothingEnabled = false;
+            
+            switch (gameState) {
+                case STATE.TITLE:
+                    renderTitle();
+                    break;
+                case STATE.SELECT:
+                    renderSelect();
+                    break;
+                case STATE.PLAYING:
+                case STATE.PAUSED:
+                case STATE.OBJECTIVES:
+                    renderGameplay();
+                    renderHUD();
+                    if (gameState === STATE.PAUSED) renderPause();
+                    if (gameState === STATE.OBJECTIVES) renderObjectives();
+                    break;
+                case STATE.GAME_OVER:
+                    renderGameOver();
+                    break;
+                case STATE.MISSION_COMPLETE:
+                    renderMissionComplete();
+                    break;
+                case STATE.VICTORY:
+                    renderVictory();
+                    break;
+            }
+            
+            // Comms overlay
+            if (currentComm) {
+                renderComms();
+            }
+            
+            ctx.restore();
+        }
+        
+        function renderTitle() {
+            // Background
+            ctx.fillStyle = COLORS.nearBlack;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Grid pattern
+            ctx.strokeStyle = COLORS.darkGreen;
+            ctx.globalAlpha = 0.1;
+            for (let x = 0; x < NATIVE_WIDTH; x += 30) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, NATIVE_HEIGHT);
+                ctx.stroke();
+            }
+            for (let y = 0; y < NATIVE_HEIGHT; y += 30) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(NATIVE_WIDTH, y);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            
+            // Scan effect
+            const scanY = (globalTimer * 3) % NATIVE_HEIGHT;
+            ctx.fillStyle = COLORS.green;
+            ctx.globalAlpha = 0.05;
+            ctx.fillRect(0, scanY, NATIVE_WIDTH, 4);
+            ctx.globalAlpha = 1;
+            
+            // Logo
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(80, 80, 350, 60);
+            
+            const grad = ctx.createLinearGradient(80, 80, 430, 140);
+            grad.addColorStop(0, COLORS.green);
+            grad.addColorStop(0.5, COLORS.brightGreen);
+            grad.addColorStop(1, COLORS.green);
+            ctx.fillStyle = grad;
+            ctx.font = 'bold 36px "Rajdhani", sans-serif';
+            ctx.fillText('THE SPARROWS', 100, 125);
+            
+            ctx.fillStyle = COLORS.orange;
+            ctx.font = '18px "Rajdhani", sans-serif';
+            ctx.fillText('SEASON 5', 210, 160);
+            
+            ctx.fillStyle = COLORS.red;
+            ctx.font = 'bold 24px "Rajdhani", sans-serif';
+            ctx.fillText('REVELATIONS', 185, 195);
+            
+            // Tagline
+            ctx.fillStyle = COLORS.lightGray;
+            ctx.font = '12px "Roboto Mono", monospace';
+            ctx.fillText('WE WERE THEIR WEAPONS. NOW WE\'RE THEIR NIGHTMARE.', 100, 230);
+            
+            // Press start
+            if (Math.floor(globalTimer / 35) % 2 === 0) {
+                ctx.fillStyle = COLORS.green;
+                ctx.font = '14px "Roboto Mono", monospace';
+                ctx.fillText('PRESS START', 210, 310);
+            }
+            
+            // Classification
+            ctx.fillStyle = COLORS.red;
+            ctx.font = '10px "Roboto Mono", monospace';
+            ctx.fillText('CLASSIFIED // DIRECTORATE EYES ONLY', 150, 360);
+            
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.font = '10px "Roboto Mono", monospace';
+            ctx.fillText('2025 ZUUP INNOVATION LAB', 185, 375);
+        }
+        
+        function renderSelect() {
+            ctx.fillStyle = COLORS.nearBlack;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            ctx.fillStyle = COLORS.green;
+            ctx.font = 'bold 20px "Rajdhani", sans-serif';
+            ctx.fillText('SELECT OPERATIVE', 170, 35);
+            
+            CHARACTERS.forEach((char, i) => {
+                const x = 30 + i * 120;
+                const y = 60;
+                const selected = i === player.charIndex;
+                const locked = char.locked;
+                
+                // Card
+                ctx.fillStyle = locked ? COLORS.darkGray : (selected ? char.darkColor : COLORS.black);
+                ctx.fillRect(x, y, 110, 200);
+                
+                if (selected && !locked) {
+                    ctx.strokeStyle = char.color;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, 110, 200);
+                }
+                
+                // Avatar
+                ctx.fillStyle = locked ? COLORS.gray : char.color;
+                ctx.globalAlpha = locked ? 0.3 : 0.4;
+                ctx.fillRect(x + 10, y + 10, 90, 70);
+                ctx.globalAlpha = 1;
+                
+                // Silhouette
+                ctx.fillStyle = locked ? COLORS.gray : char.color;
+                ctx.fillRect(x + 38, y + 25, 34, 45);
+                ctx.fillRect(x + 43, y + 15, 24, 20);
+                
+                if (locked) {
+                    ctx.fillStyle = COLORS.red;
+                    ctx.font = '10px "Roboto Mono", monospace';
+                    ctx.fillText('LOCKED', x + 32, y + 55);
+                }
+                
+                // Info
+                ctx.fillStyle = locked ? COLORS.gray : COLORS.white;
+                ctx.font = '10px "Roboto Mono", monospace';
+                ctx.fillText(char.codename, x + 10, y + 95);
+                
+                ctx.fillStyle = locked ? COLORS.darkGray : char.color;
+                ctx.font = '8px "Roboto Mono", monospace';
+                ctx.fillText(char.name.split(' ')[0], x + 10, y + 108);
+                
+                // Status
+                ctx.fillStyle = char.status === 'STATUS UNKNOWN' ? COLORS.amber : COLORS.red;
+                ctx.font = '7px "Roboto Mono", monospace';
+                ctx.fillText(char.status, x + 10, y + 125);
+                
+                if (!locked) {
+                    // Stats
+                    ctx.fillStyle = COLORS.gray;
+                    ctx.font = '7px "Roboto Mono", monospace';
+                    ctx.fillText('STL', x + 10, y + 145);
+                    ctx.fillText('CMB', x + 10, y + 157);
+                    ctx.fillText('TCH', x + 10, y + 169);
+                    ctx.fillText('END', x + 10, y + 181);
+                    
+                    renderStatBar(x + 35, y + 140, char.stats.stealth, selected ? COLORS.cyan : COLORS.gray);
+                    renderStatBar(x + 35, y + 152, char.stats.combat, selected ? COLORS.red : COLORS.gray);
+                    renderStatBar(x + 35, y + 164, char.stats.tech, selected ? COLORS.green : COLORS.gray);
+                    renderStatBar(x + 35, y + 176, char.stats.endurance, selected ? COLORS.orange : COLORS.gray);
+                }
+            });
+            
+            // Selected info
+            const char = CHARACTERS[player.charIndex];
+            if (!char.locked) {
+                ctx.fillStyle = char.color;
+                ctx.font = '12px "Roboto Mono", monospace';
+                ctx.fillText('ABILITY: ' + char.ability, 30, 285);
+                ctx.fillStyle = COLORS.lightGray;
+                ctx.font = '10px "Roboto Mono", monospace';
+                ctx.fillText(char.abilityDesc, 30, 302);
+            }
+            
+            if (Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.green;
+                ctx.font = '12px "Roboto Mono", monospace';
+                ctx.fillText('PRESS START TO BEGIN MISSION', 140, 350);
+            }
+        }
+        
+        function renderStatBar(x, y, value, color) {
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.fillRect(x, y, 60, 6);
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, (value / 10) * 60, 6);
+        }
+        
+        function renderGameplay() {
+            // Apply camera shake
+            const shakeX = (Math.random() - 0.5) * camShake;
+            const shakeY = (Math.random() - 0.5) * camShake;
+            
+            // Background
+            ctx.fillStyle = COLORS.nearBlack;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            ctx.save();
+            ctx.translate(-Math.floor(camX) + shakeX, -Math.floor(camY) + shakeY);
+            
+            // Apply vision mode filter
+            if (visionMode === VISION.NIGHT) {
+                ctx.fillStyle = COLORS.nvDark;
+                ctx.fillRect(camX, camY, NATIVE_WIDTH, NATIVE_HEIGHT);
+            } else if (visionMode === VISION.THERMAL) {
+                ctx.fillStyle = '#0a0a1a';
+                ctx.fillRect(camX, camY, NATIVE_WIDTH, NATIVE_HEIGHT);
+            }
+            
+            // Floor
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.fillRect(0, 0, mission.width, mission.height);
+            
+            // Grid
+            ctx.strokeStyle = visionMode === VISION.NIGHT ? COLORS.nvGreen : COLORS.gray;
+            ctx.globalAlpha = 0.1;
+            for (let x = 0; x < mission.width; x += 40) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mission.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < mission.height; y += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mission.width, y);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            
+            // Lights (if normal vision)
+            if (visionMode === VISION.NORMAL) {
+                lights.forEach(light => {
+                    const grad = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, light.radius);
+                    grad.addColorStop(0, `rgba(255, 240, 200, ${light.intensity * 0.15})`);
+                    grad.addColorStop(1, 'rgba(255, 240, 200, 0)');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(light.x - light.radius, light.y - light.radius, light.radius * 2, light.radius * 2);
+                });
+            }
+            
+            // Walls
+            walls.forEach(wall => {
+                ctx.fillStyle = visionMode === VISION.NIGHT ? '#003300' : 
+                               visionMode === VISION.THERMAL ? '#1a1a3a' : COLORS.concrete;
+                ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+                
+                // 3D edge
+                ctx.fillStyle = visionMode === VISION.NIGHT ? '#004400' : COLORS.lightGray;
+                ctx.fillRect(wall.x, wall.y, wall.w, 2);
+            });
+            
+            // Cover points
+            coverPoints.forEach(cover => {
+                ctx.fillStyle = visionMode === VISION.NIGHT ? '#002200' : COLORS.metal;
+                ctx.fillRect(cover.x, cover.y, cover.w, cover.h);
+                
+                if (distance(player.x, player.y, cover.x + cover.w/2, cover.y + cover.h/2) < 50) {
+                    ctx.strokeStyle = COLORS.green;
+                    ctx.globalAlpha = 0.5;
+                    ctx.strokeRect(cover.x - 2, cover.y - 2, cover.w + 4, cover.h + 4);
+                    ctx.globalAlpha = 1;
+                }
+            });
+            
+            // Doors
+            doors.forEach(door => {
+                if (door.open) {
+                    ctx.fillStyle = COLORS.darkGreen;
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillRect(door.x, door.y, door.w, door.h);
+                    ctx.globalAlpha = 1;
+                } else {
+                    ctx.fillStyle = door.locked ? COLORS.rust : COLORS.metal;
+                    ctx.fillRect(door.x, door.y, door.w, door.h);
+                    
+                    if (door.locked) {
+                        const hasKey = items.some(i => i.collected && i.id === door.keyId);
+                        ctx.fillStyle = hasKey ? COLORS.green : COLORS.red;
+                        ctx.fillRect(door.x + door.w/2 - 3, door.y + door.h/2 - 3, 6, 6);
+                    }
+                }
+            });
+            
+            // Terminals
+            terminals.forEach(term => {
+                ctx.fillStyle = term.hacked ? COLORS.darkGreen : COLORS.darkBlue;
+                ctx.fillRect(term.x, term.y, term.w, term.h);
+                
+                ctx.fillStyle = term.hacked ? COLORS.green : COLORS.blue;
+                ctx.fillRect(term.x + 3, term.y + 3, term.w - 6, term.h - 8);
+                
+                // Screen glow
+                if (!term.hacked) {
+                    ctx.fillStyle = COLORS.cyan;
+                    ctx.globalAlpha = 0.2 + Math.sin(globalTimer * 0.1) * 0.1;
+                    ctx.fillRect(term.x - 3, term.y - 3, term.w + 6, term.h + 6);
+                    ctx.globalAlpha = 1;
+                }
+            });
+            
+            // Items
+            items.forEach(item => {
+                if (item.collected) return;
+                
+                const bounce = Math.sin(globalTimer * 0.08) * 3;
+                const itemColor = item.type === 'health' ? COLORS.brightGreen :
+                                 item.type === 'armor' ? COLORS.blue :
+                                 item.type === 'ammo' ? COLORS.orange : COLORS.amber;
+                
+                ctx.fillStyle = itemColor;
+                ctx.fillRect(item.x - 6, item.y - 6 + bounce, 12, 12);
+                
+                // Glow
+                ctx.fillStyle = itemColor;
+                ctx.globalAlpha = 0.2;
+                ctx.fillRect(item.x - 10, item.y - 10 + bounce, 20, 20);
+                ctx.globalAlpha = 1;
+            });
+            
+            // Camera vision cones
+            cameras.forEach(cam => {
+                if (cam.disabled) {
+                    ctx.fillStyle = COLORS.gray;
+                    ctx.globalAlpha = 0.1;
+                } else {
+                    ctx.fillStyle = alertLevel >= ALERT.ALERT ? COLORS.red : COLORS.amber;
+                    ctx.globalAlpha = 0.12;
+                }
+                
+                const currentAngle = cam.currentAngle || cam.angle;
+                ctx.beginPath();
+                ctx.moveTo(cam.x, cam.y);
+                ctx.arc(cam.x, cam.y, cam.range, currentAngle - cam.fov/2, currentAngle + cam.fov/2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                
+                // Camera body
+                ctx.fillStyle = cam.disabled ? COLORS.gray : COLORS.red;
+                ctx.fillRect(cam.x - 5, cam.y - 5, 10, 10);
+                
+                if (cam.disabled) {
+                    ctx.strokeStyle = COLORS.red;
+                    ctx.beginPath();
+                    ctx.moveTo(cam.x - 5, cam.y - 5);
+                    ctx.lineTo(cam.x + 5, cam.y + 5);
+                    ctx.stroke();
+                }
+            });
+            
+            // Bodies
+            bodies.forEach(body => {
+                ctx.fillStyle = visionMode === VISION.THERMAL ? COLORS.thermalWarm : COLORS.gray;
+                ctx.fillRect(body.x - 8, body.y - 4, 16, 8);
+            });
+            
+            // Guard vision cones
+            guards.forEach(guard => {
+                if (!guard.alive || guard.stunned) return;
+                
+                ctx.fillStyle = guard.state === 'combat' ? COLORS.red :
+                               guard.state === 'suspicious' ? COLORS.orange :
+                               guard.state === 'search' ? COLORS.amber : COLORS.amber;
+                ctx.globalAlpha = 0.1;
+                
+                ctx.beginPath();
+                ctx.moveTo(guard.x, guard.y);
+                ctx.arc(guard.x, guard.y, guard.viewDist, 
+                       guard.angle - guard.viewAngle/2, guard.angle + guard.viewAngle/2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+            
+            // Guards
+            guards.forEach(guard => {
+                if (!guard.alive) return;
+                
+                if (guard.stunned) {
+                    ctx.fillStyle = COLORS.gray;
+                    ctx.fillRect(guard.x - 8, guard.y - 4, 16, 8);
+                    return;
+                }
+                
+                const guardColor = visionMode === VISION.THERMAL ? COLORS.thermalHot :
+                                  visionMode === VISION.NIGHT ? '#00ff00' :
+                                  guard.elite ? COLORS.brightRed : COLORS.rust;
+                
+                // Body
+                ctx.fillStyle = guardColor;
+                ctx.fillRect(guard.x - 7, guard.y - 7, 14, 14);
+                
+                // Direction
+                const dx = Math.cos(guard.angle) * 10;
+                const dy = Math.sin(guard.angle) * 10;
+                ctx.strokeStyle = COLORS.white;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(guard.x, guard.y);
+                ctx.lineTo(guard.x + dx, guard.y + dy);
+                ctx.stroke();
+                
+                // State indicator
+                if (guard.state === 'suspicious') {
+                    ctx.fillStyle = COLORS.amber;
+                    ctx.font = '10px "Rajdhani", sans-serif';
+                    ctx.fillText('?', guard.x - 3, guard.y - 14);
+                } else if (guard.state === 'combat' || guard.state === 'search') {
+                    ctx.fillStyle = COLORS.red;
+                    ctx.font = '10px "Rajdhani", sans-serif';
+                    ctx.fillText('!', guard.x - 2, guard.y - 14);
+                }
+                
+                // Marked indicator
+                if (guard.marked) {
+                    ctx.strokeStyle = COLORS.brightGreen;
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(guard.x - 10, guard.y - 10, 20, 20);
+                }
+            });
+            
+            // Player
+            const char = CHARACTERS[player.charIndex];
+            const visible = !player.invincible || Math.floor(globalTimer / 4) % 2 === 0;
+            
+            if (visible) {
+                const playerColor = visionMode === VISION.THERMAL ? COLORS.thermalHot :
+                                   visionMode === VISION.NIGHT ? COLORS.nvGreen : char.color;
+                
+                // Shadow
+                ctx.fillStyle = COLORS.shadowMedium;
+                ctx.beginPath();
+                ctx.ellipse(player.x, player.y + 3, 8, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Body
+                ctx.fillStyle = player.crouching || player.inCover ? char.darkColor : playerColor;
+                const size = player.crouching ? 12 : 14;
+                ctx.fillRect(player.x - size/2, player.y - size/2, size, size);
+                
+                // Direction
+                const pdx = Math.cos(player.angle) * 10;
+                const pdy = Math.sin(player.angle) * 10;
+                ctx.strokeStyle = COLORS.white;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(player.x + pdx, player.y + pdy);
+                ctx.stroke();
+                
+                // Ability active indicator
+                if (player.abilityActive) {
+                    ctx.strokeStyle = char.color;
+                    ctx.globalAlpha = 0.5 + Math.sin(globalTimer * 0.2) * 0.3;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(player.x, player.y, 20 + Math.sin(globalTimer * 0.1) * 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+            }
+            
+            // Projectiles
+            projectiles.forEach(proj => {
+                ctx.fillStyle = proj.owner === 'player' ? char.color : COLORS.orange;
+                ctx.fillRect(proj.x - 3, proj.y - 3, 6, 6);
+            });
+            
+            // Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 60;
+                ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+            });
+            ctx.globalAlpha = 1;
+            
+            ctx.restore();
+            
+            // Vision mode overlay
+            if (visionMode === VISION.NIGHT) {
+                ctx.fillStyle = COLORS.nvGreen;
+                ctx.globalAlpha = 0.03;
+                ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+                ctx.globalAlpha = 1;
+                
+                // Noise
+                ctx.fillStyle = COLORS.nvGreen;
+                ctx.globalAlpha = 0.02;
+                for (let i = 0; i < 100; i++) {
+                    ctx.fillRect(Math.random() * NATIVE_WIDTH, Math.random() * NATIVE_HEIGHT, 2, 1);
+                }
+                ctx.globalAlpha = 1;
+            }
+        }
+        
+        function renderHUD() {
+            const char = CHARACTERS[player.charIndex];
+            
+            // Top bar
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.7;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, 35);
+            ctx.globalAlpha = 1;
+            
+            // Health
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '8px "Roboto Mono", monospace';
+            ctx.fillText('HEALTH', 10, 12);
+            
+            ctx.fillStyle = COLORS.darkRed;
+            ctx.fillRect(10, 16, 100, 8);
+            ctx.fillStyle = player.health > 30 ? COLORS.green : COLORS.red;
+            ctx.fillRect(10, 16, (player.health / player.maxHealth) * 100, 8);
+            
+            // Armor
+            ctx.fillStyle = COLORS.gray;
+            ctx.fillText('ARMOR', 10, 32);
+            
+            ctx.fillStyle = COLORS.darkBlue;
+            ctx.fillRect(50, 26, 60, 6);
+            ctx.fillStyle = COLORS.blue;
+            ctx.fillRect(50, 26, (player.armor / player.maxArmor) * 60, 6);
+            
+            // Ability
+            ctx.fillStyle = COLORS.gray;
+            ctx.fillText('ABILITY', 130, 12);
+            
+            ctx.fillStyle = COLORS.darkGray;
+            ctx.fillRect(130, 16, 80, 8);
+            ctx.fillStyle = player.abilityCharge >= 30 ? char.color : COLORS.gray;
+            ctx.fillRect(130, 16, (player.abilityCharge / player.maxAbilityCharge) * 80, 8);
+            
+            // Alert status
+            const alertColors = [COLORS.green, COLORS.amber, COLORS.orange, COLORS.red, COLORS.brightRed];
+            const alertNames = ['STEALTH', 'SUSPICIOUS', 'CAUTION', 'ALERT', 'COMBAT'];
+            
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(NATIVE_WIDTH / 2 - 50, 5, 100, 20);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = alertColors[alertLevel];
+            ctx.font = '10px "Rajdhani", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(alertNames[alertLevel], NATIVE_WIDTH / 2, 18);
+            ctx.textAlign = 'left';
+            
+            // Flashing for alert/combat
+            if (alertLevel >= ALERT.ALERT) {
+                ctx.fillStyle = alertColors[alertLevel];
+                ctx.globalAlpha = Math.sin(globalTimer * 0.2) * 0.1;
+                ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+                ctx.globalAlpha = 1;
+            }
+            
+            // Character info
+            ctx.fillStyle = char.color;
+            ctx.font = '10px "Roboto Mono", monospace';
+            ctx.fillText(char.codename, NATIVE_WIDTH - 80, 15);
+            ctx.fillStyle = COLORS.lightGray;
+            ctx.font = '8px "Roboto Mono", monospace';
+            ctx.fillText(char.ability, NATIVE_WIDTH - 80, 28);
+            
+            // Vision mode
+            const visionNames = ['NORMAL', 'NIGHT VISION', 'THERMAL'];
+            ctx.fillStyle = visionMode === VISION.NIGHT ? COLORS.nvGreen : 
+                           visionMode === VISION.THERMAL ? COLORS.thermalHot : COLORS.white;
+            ctx.font = '8px "Roboto Mono", monospace';
+            ctx.fillText('[F] ' + visionNames[visionMode], 230, 12);
+            
+            // Movement state
+            const stateText = player.inCover ? 'IN COVER' : 
+                             player.crouching ? 'CROUCHED' : 
+                             player.running ? 'SPRINTING' : 'STANDING';
+            ctx.fillStyle = COLORS.lightGray;
+            ctx.fillText(stateText, 230, 24);
+            
+            // Mini radar
+            renderRadar();
+            
+            // Mission info
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '8px "Roboto Mono", monospace';
+            ctx.fillText(mission.name + ' // ' + mission.location, 10, NATIVE_HEIGHT - 8);
+        }
+        
+        function renderRadar() {
+            const radarX = NATIVE_WIDTH - 70;
+            const radarY = NATIVE_HEIGHT - 70;
+            const radarSize = 60;
+            const radarRange = 150;
+            
+            // Background
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(radarX - 5, radarY - 5, radarSize + 10, radarSize + 10);
+            ctx.globalAlpha = 1;
+            
+            // Circle
+            ctx.strokeStyle = COLORS.green;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(radarX + radarSize/2, radarY + radarSize/2, radarSize/2, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Grid
+            ctx.strokeStyle = COLORS.darkGreen;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(radarX, radarY + radarSize/2);
+            ctx.lineTo(radarX + radarSize, radarY + radarSize/2);
+            ctx.moveTo(radarX + radarSize/2, radarY);
+            ctx.lineTo(radarX + radarSize/2, radarY + radarSize);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            
+            // Sweep
+            const sweepAngle = globalTimer * 0.04;
+            ctx.strokeStyle = COLORS.green;
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            ctx.moveTo(radarX + radarSize/2, radarY + radarSize/2);
+            ctx.lineTo(
+                radarX + radarSize/2 + Math.cos(sweepAngle) * radarSize/2,
+                radarY + radarSize/2 + Math.sin(sweepAngle) * radarSize/2
+            );
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            
+            // Player
+            ctx.fillStyle = COLORS.brightGreen;
+            ctx.fillRect(radarX + radarSize/2 - 2, radarY + radarSize/2 - 2, 4, 4);
+            
+            // Enemies
+            guards.forEach(guard => {
+                if (!guard.alive) return;
+                
+                const dx = (guard.x - player.x) / radarRange * (radarSize/2);
+                const dy = (guard.y - player.y) / radarRange * (radarSize/2);
+                
+                if (Math.abs(dx) < radarSize/2 && Math.abs(dy) < radarSize/2) {
+                    ctx.fillStyle = guard.state === 'combat' ? COLORS.red : COLORS.orange;
+                    ctx.fillRect(radarX + radarSize/2 + dx - 2, radarY + radarSize/2 + dy - 2, 4, 4);
+                }
+            });
+            
+            // Objectives
+            triggers.forEach((t, i) => {
+                if (objectivesComplete[t.objective]) return;
+                
+                const dx = (t.x + t.w/2 - player.x) / radarRange * (radarSize/2);
+                const dy = (t.y + t.h/2 - player.y) / radarRange * (radarSize/2);
+                
+                if (Math.abs(dx) < radarSize/2 && Math.abs(dy) < radarSize/2) {
+                    if (Math.floor(globalTimer / 15) % 2 === 0) {
+                        ctx.fillStyle = COLORS.amber;
+                        ctx.fillRect(radarX + radarSize/2 + dx - 2, radarY + radarSize/2 + dy - 2, 4, 4);
+                    }
+                }
+            });
+        }
+        
+        function renderComms() {
+            // Comm box
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.9;
+            ctx.fillRect(30, NATIVE_HEIGHT - 100, NATIVE_WIDTH - 60, 70);
+            ctx.globalAlpha = 1;
+            
+            ctx.strokeStyle = COLORS.green;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(30, NATIVE_HEIGHT - 100, NATIVE_WIDTH - 60, 70);
+            
+            if (currentComm) {
+                // Speaker
+                let speakerColor = COLORS.gray;
+                if (currentComm.speaker === 'NATASHA') speakerColor = COLORS.cyan;
+                else if (currentComm.speaker === 'MARIA') speakerColor = COLORS.brightGreen;
+                else if (currentComm.speaker === 'ANYA') speakerColor = COLORS.orange;
+                else if (currentComm.speaker === 'OLGA') speakerColor = COLORS.amber;
+                else if (currentComm.speaker === 'DIRECTOR') speakerColor = COLORS.red;
+                else if (currentComm.speaker === 'SYSTEM') speakerColor = COLORS.gray;
+                
+                ctx.fillStyle = speakerColor;
+                ctx.font = '10px "Roboto Mono", monospace';
+                ctx.fillText(currentComm.speaker, 45, NATIVE_HEIGHT - 82);
+                
+                // Text
+                ctx.fillStyle = COLORS.white;
+                ctx.font = '9px "Roboto Mono", monospace';
+                
+                // Word wrap
+                const words = commText.split(' ');
+                let line = '';
+                let y = NATIVE_HEIGHT - 65;
+                
+                words.forEach(word => {
+                    const testLine = line + word + ' ';
+                    if (testLine.length > 55) {
+                        ctx.fillText(line, 45, y);
+                        line = word + ' ';
+                        y += 14;
+                    } else {
+                        line = testLine;
+                    }
+                });
+                ctx.fillText(line, 45, y);
+                
+                // Continue
+                if (commCharIndex >= currentComm.text.length) {
+                    if (Math.floor(globalTimer / 20) % 2 === 0) {
+                        ctx.fillStyle = COLORS.green;
+                        ctx.fillText('▼', NATIVE_WIDTH - 55, NATIVE_HEIGHT - 40);
+                    }
+                }
+            }
+        }
+        
+        function renderPause() {
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.white;
+            ctx.font = 'bold 24px "Rajdhani", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('PAUSED', NATIVE_WIDTH / 2, 180);
+            
+            ctx.fillStyle = COLORS.lightGray;
+            ctx.font = '12px "Roboto Mono", monospace';
+            ctx.fillText('PRESS ESC TO CONTINUE', NATIVE_WIDTH / 2, 220);
+            ctx.textAlign = 'left';
+        }
+        
+        function renderObjectives() {
+            ctx.fillStyle = COLORS.black;
+            ctx.globalAlpha = 0.9;
+            ctx.fillRect(100, 80, NATIVE_WIDTH - 200, NATIVE_HEIGHT - 160);
+            ctx.globalAlpha = 1;
+            
+            ctx.strokeStyle = COLORS.green;
+            ctx.strokeRect(100, 80, NATIVE_WIDTH - 200, NATIVE_HEIGHT - 160);
+            
+            ctx.fillStyle = COLORS.amber;
+            ctx.font = 'bold 16px "Rajdhani", sans-serif';
+            ctx.fillText('MISSION OBJECTIVES', 120, 110);
+            
+            ctx.fillStyle = COLORS.lightGray;
+            ctx.font = '10px "Roboto Mono", monospace';
+            ctx.fillText(mission.name, 120, 130);
+            
+            mission.objectives.forEach((obj, i) => {
+                const complete = objectivesComplete[i];
+                ctx.fillStyle = complete ? COLORS.green : COLORS.white;
+                ctx.font = '11px "Roboto Mono", monospace';
+                ctx.fillText((complete ? '[X] ' : '[ ] ') + obj, 120, 160 + i * 25);
+            });
+            
+            ctx.fillStyle = COLORS.gray;
+            ctx.font = '10px "Roboto Mono", monospace';
+            ctx.fillText('PRESS TAB TO CLOSE', 180, NATIVE_HEIGHT - 100);
+        }
+        
+        function renderGameOver() {
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Scan lines
+            ctx.strokeStyle = COLORS.red;
+            ctx.globalAlpha = 0.1;
+            for (let y = 0; y < NATIVE_HEIGHT; y += 4) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(NATIVE_WIDTH, y);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            
+            ctx.fillStyle = COLORS.red;
+            ctx.font = 'bold 28px "Rajdhani", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('MISSION FAILED', NATIVE_WIDTH / 2, 160);
+            
+            ctx.fillStyle = COLORS.lightGray;
+            ctx.font = '12px "Roboto Mono", monospace';
+            ctx.fillText('OPERATIVE STATUS: COMPROMISED', NATIVE_WIDTH / 2, 200);
+            
+            if (stateTimer > 180 && Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.white;
+                ctx.fillText('PRESS START TO CONTINUE', NATIVE_WIDTH / 2, 280);
+            }
+            ctx.textAlign = 'left';
+        }
+        
+        function renderMissionComplete() {
+            ctx.fillStyle = COLORS.nearBlack;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            ctx.fillStyle = COLORS.green;
+            ctx.font = 'bold 24px "Rajdhani", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('MISSION COMPLETE', NATIVE_WIDTH / 2, 140);
+            
+            ctx.fillStyle = COLORS.white;
+            ctx.font = '14px "Rajdhani", sans-serif';
+            ctx.fillText(mission.name, NATIVE_WIDTH / 2, 175);
+            
+            ctx.fillStyle = COLORS.lightGray;
+            ctx.font = '10px "Roboto Mono", monospace';
+            ctx.fillText('ALL OBJECTIVES ACHIEVED', NATIVE_WIDTH / 2, 210);
+            
+            if (stateTimer > 150 && Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.green;
+                ctx.fillText('PRESS START TO CONTINUE', NATIVE_WIDTH / 2, 280);
+            }
+            ctx.textAlign = 'left';
+        }
+        
+        function renderVictory() {
+            ctx.fillStyle = COLORS.nearBlack;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+            
+            // Stars / particles
+            for (let i = 0; i < 50; i++) {
+                const x = (i * 73 + globalTimer * 0.3) % NATIVE_WIDTH;
+                const y = (i * 47) % NATIVE_HEIGHT;
+                ctx.fillStyle = i % 3 === 0 ? COLORS.amber : COLORS.white;
+                ctx.fillRect(x, y, 2, 2);
+            }
+            
+            ctx.fillStyle = COLORS.amber;
+            ctx.font = 'bold 24px "Rajdhani", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('THE SPARROWS', NATIVE_WIDTH / 2, 100);
+            
+            ctx.fillStyle = COLORS.green;
+            ctx.font = 'bold 18px "Rajdhani", sans-serif';
+            ctx.fillText('MISSION ACCOMPLISHED', NATIVE_WIDTH / 2, 130);
+            
+            // Characters
+            CHARACTERS.forEach((char, i) => {
+                if (i === 3) return; // Olga separate
+                const x = 130 + i * 80;
+                ctx.fillStyle = char.color;
+                ctx.fillRect(x, 170, 50, 60);
+                ctx.fillStyle = COLORS.black;
+                ctx.fillRect(x + 5, 175, 40, 50);
+                ctx.fillStyle = char.color;
+                ctx.fillRect(x + 15, 185, 20, 30);
+            });
+            
+            // Olga returns
+            ctx.fillStyle = COLORS.amber;
+            ctx.fillRect(370, 170, 50, 60);
+            ctx.fillStyle = COLORS.black;
+            ctx.fillRect(375, 175, 40, 50);
+            ctx.fillStyle = COLORS.amber;
+            ctx.fillRect(385, 185, 20, 30);
+            
+            ctx.fillStyle = COLORS.white;
+            ctx.font = '10px "Roboto Mono", monospace';
+            ctx.fillText('THE DIRECTORATE IS FINISHED.', NATIVE_WIDTH / 2, 260);
+            ctx.fillText('PROJECT MOCKINGBIRD: EXPOSED.', NATIVE_WIDTH / 2, 280);
+            ctx.fillText('THE SPARROWS: FREE.', NATIVE_WIDTH / 2, 300);
+            
+            ctx.fillStyle = COLORS.cyan;
+            ctx.font = '12px "Rajdhani", sans-serif';
+            ctx.fillText('TO BE CONTINUED IN SEASON 6...', NATIVE_WIDTH / 2, 340);
+            
+            if (!currentComm && stateTimer > 200 && Math.floor(globalTimer / 30) % 2 === 0) {
+                ctx.fillStyle = COLORS.green;
+                ctx.font = '10px "Roboto Mono", monospace';
+                ctx.fillText('PRESS START', NATIVE_WIDTH / 2, 370);
+            }
+            ctx.textAlign = 'left';
+        }
+        
+        // Game Loop
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        gameLoop();
+    </script>
+</body>
+</html>

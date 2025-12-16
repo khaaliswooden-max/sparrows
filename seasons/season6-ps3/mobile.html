@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>THE SPARROWS - Season 6: Reunion (Mobile)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; }
+        #gameCanvas { display: block; }
+        #controls {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 125px;
+            display: flex; justify-content: space-between; align-items: center; padding: 8px 15px;
+        }
+        #joystick {
+            width: 95px; height: 95px;
+            background: rgba(48,96,160,0.25);
+            border: 2px solid rgba(48,96,160,0.5);
+            border-radius: 50%; position: relative;
+        }
+        #joystickKnob {
+            width: 38px; height: 38px;
+            background: rgba(48,96,160,0.7);
+            border-radius: 50%; position: absolute;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .action-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 140px; justify-content: flex-end; }
+        .action-btn {
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 8px; font-weight: bold; color: rgba(255,255,255,0.9);
+            font-family: sans-serif;
+        }
+        .btn-shoot { background: rgba(200,72,72,0.4); border: 2px solid rgba(200,72,72,0.7); width: 58px; height: 58px; font-size: 9px; }
+        .btn-squad { background: rgba(72,120,200,0.3); border: 2px solid rgba(72,120,200,0.6); }
+        .btn-cover { background: rgba(100,100,100,0.3); border: 2px solid rgba(150,150,150,0.6); }
+        .action-btn.active { filter: brightness(1.4); }
+        #startOverlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100;
+        }
+        #startBtn { padding: 20px 40px; font-size: 18px; background: rgba(48,96,160,0.8); border: 3px solid #3060a0; color: #fff; border-radius: 10px; }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="controls" class="hide">
+        <div id="joystick"><div id="joystickKnob"></div></div>
+        <div class="action-btns">
+            <div class="action-btn btn-squad" id="btnSquad">SQUAD</div>
+            <div class="action-btn btn-cover" id="btnCover">COVER</div>
+            <div class="action-btn btn-shoot" id="btnShoot">FIRE</div>
+        </div>
+    </div>
+    
+    <div id="startOverlay">
+        <button id="startBtn">TAP TO START</button>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const W = 426, H = 240;
+let scale = 1;
+
+function resize() {
+    const ch = 125;
+    const ah = window.innerHeight - ch;
+    scale = Math.min(window.innerWidth / W, ah / H);
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    canvas.style.marginTop = Math.max(0, (ah - H * scale) / 2) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+const COL = { bg: '#0c1018', floor: '#1a2028', wall: '#2a3038', enemy: '#c84848', text: '#e8e8e8', gold: '#d4a050', blue: '#3060a0' };
+
+const joy = { x: 0, y: 0 };
+const touch = { shoot: false, squad: false, cover: false };
+const ST = { TITLE: 0, SELECT: 1, PLAY: 2, WIN: 3, LOSE: 4, DONE: 5 };
+let state = ST.TITLE, charIdx = 0, mission = 0, timer = 0;
+
+const CHARS = [
+    { name: 'CIPHER', col: '#50b8d8' },
+    { name: 'VENOM', col: '#58b868' },
+    { name: 'HAWK', col: '#d88848' },
+    { name: 'ORACLE', col: '#c8a040' }
+];
+
+let player = { x: 50, y: 120, w: 14, h: 22, hp: 100, ammo: 40, face: 1, shootCD: 0, inCover: false };
+let squad = [];
+let enemies = [], bullets = [], covers = [], particles = [];
+let camera = { x: 0 }, lvlW = 900;
+let squadMode = 'follow'; // follow, hold, attack
+
+function initLevel() {
+    player.x = 50; player.y = 120; player.hp = 100; player.ammo = 40; player.shootCD = 0; player.inCover = false;
+    enemies = []; bullets = []; covers = []; particles = []; camera.x = 0;
+    lvlW = 800 + mission * 200;
+    squadMode = 'follow';
+    
+    // Squad mates
+    squad = CHARS.filter((_, i) => i !== charIdx).map((c, i) => ({
+        x: 30 + i * 20, y: 100 + i * 30, w: 12, h: 20, hp: 80, col: c.col, name: c.name,
+        shootCD: 30 + i * 10, target: null
+    }));
+    
+    // Covers
+    for (let i = 0; i < 8 + mission * 2; i++) {
+        covers.push({ x: 120 + i * 90, y: 60 + (i % 3) * 60, w: 40, h: 14 });
+    }
+    
+    // Enemies
+    for (let i = 0; i < 8 + mission * 3; i++) {
+        enemies.push({
+            x: 250 + i * 70 + Math.random() * 30, y: 50 + Math.random() * 140,
+            w: 12, h: 20, hp: 2, mhp: 2, vx: 0.4, dir: 1, shootCD: 60 + Math.random() * 60
+        });
+    }
+}
+
+// Joystick
+const joystickEl = document.getElementById('joystick');
+const knob = document.getElementById('joystickKnob');
+let joyRect = null;
+
+function updateJoy(tx, ty) {
+    if (!joyRect) joyRect = joystickEl.getBoundingClientRect();
+    const cx = joyRect.left + joyRect.width / 2;
+    const cy = joyRect.top + joyRect.height / 2;
+    let dx = tx - cx, dy = ty - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxD = joyRect.width / 2 - 19;
+    if (dist > maxD) { dx = dx / dist * maxD; dy = dy / dist * maxD; }
+    knob.style.left = (50 + dx / maxD * 29) + '%';
+    knob.style.top = (50 + dy / maxD * 29) + '%';
+    joy.x = dx / maxD; joy.y = dy / maxD;
+}
+
+joystickEl.addEventListener('touchstart', e => { e.preventDefault(); joyRect = joystickEl.getBoundingClientRect(); updateJoy(e.touches[0].clientX, e.touches[0].clientY); });
+joystickEl.addEventListener('touchmove', e => { e.preventDefault(); updateJoy(e.touches[0].clientX, e.touches[0].clientY); });
+joystickEl.addEventListener('touchend', e => { e.preventDefault(); joy.x = 0; joy.y = 0; knob.style.left = '50%'; knob.style.top = '50%'; });
+
+['Shoot', 'Squad', 'Cover'].forEach(b => {
+    const el = document.getElementById('btn' + b);
+    el.addEventListener('touchstart', e => { e.preventDefault(); touch[b.toLowerCase()] = true; el.classList.add('active'); });
+    el.addEventListener('touchend', e => { e.preventDefault(); touch[b.toLowerCase()] = false; el.classList.remove('active'); });
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+    document.getElementById('startOverlay').classList.add('hide');
+    document.getElementById('controls').classList.remove('hide');
+    state = ST.SELECT;
+});
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state === ST.WIN) { mission++; state = mission >= 4 ? ST.DONE : ST.PLAY; if (state === ST.PLAY) initLevel(); }
+    else if (state === ST.LOSE) { state = ST.PLAY; initLevel(); }
+    else if (state === ST.DONE) { state = ST.TITLE; mission = 0; }
+});
+
+let pSquad = false, pCover = false;
+function update() {
+    timer++;
+    
+    if (state === ST.SELECT) {
+        if (joy.x < -0.5 && timer % 10 === 0) charIdx = (charIdx + 3) % 4;
+        if (joy.x > 0.5 && timer % 10 === 0) charIdx = (charIdx + 1) % 4;
+        if (touch.shoot) { state = ST.PLAY; initLevel(); }
+    }
+    
+    if (state === ST.PLAY) {
+        // Squad mode toggle
+        if (touch.squad && !pSquad) {
+            squadMode = squadMode === 'follow' ? 'hold' : squadMode === 'hold' ? 'attack' : 'follow';
+        }
+        
+        // Cover
+        if (touch.cover && !pCover) {
+            player.inCover = !player.inCover;
+        }
+        
+        // Movement
+        if (!player.inCover) {
+            player.x += joy.x * 2.5;
+            player.y += joy.y * 2.5;
+            if (joy.x !== 0) player.face = joy.x > 0 ? 1 : -1;
+        }
+        
+        player.x = Math.max(10, Math.min(lvlW - player.w - 10, player.x));
+        player.y = Math.max(30, Math.min(H - player.h - 10, player.y));
+        
+        camera.x = player.x - W / 3;
+        camera.x = Math.max(0, Math.min(lvlW - W, camera.x));
+        
+        // Find nearest enemy for auto-aim
+        let nearestEnemy = null, nearestDist = 250;
+        enemies.forEach(e => {
+            if (e.hp <= 0) return;
+            const dx = e.x - player.x, dy = e.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < nearestDist) { nearestDist = dist; nearestEnemy = e; }
+        });
+        
+        // Shooting
+        if (player.shootCD > 0) player.shootCD--;
+        if (touch.shoot && player.shootCD <= 0 && player.ammo > 0) {
+            player.shootCD = 6;
+            player.ammo--;
+            
+            let tx, ty;
+            if (nearestEnemy) { tx = nearestEnemy.x + nearestEnemy.w/2; ty = nearestEnemy.y + nearestEnemy.h/2; }
+            else { tx = player.x + player.face * 200; ty = player.y + player.h/2; }
+            
+            const dx = tx - player.x, dy = ty - (player.y + player.h/2);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            bullets.push({ x: player.x + player.w/2, y: player.y + player.h/2, vx: dx/dist * 10, vy: dy/dist * 10, owner: 'player' });
+        }
+        
+        // Squad AI
+        squad.forEach((s, i) => {
+            if (s.hp <= 0) return;
+            
+            if (squadMode === 'follow') {
+                const tx = player.x - 30 - i * 25, ty = player.y + (i - 1) * 20;
+                s.x += (tx - s.x) * 0.08;
+                s.y += (ty - s.y) * 0.08;
+            } else if (squadMode === 'attack') {
+                // Find target
+                if (!s.target || s.target.hp <= 0) {
+                    s.target = enemies.find(e => e.hp > 0);
+                }
+                if (s.target) {
+                    const dx = s.target.x - s.x;
+                    if (Math.abs(dx) > 80) s.x += Math.sign(dx) * 1.5;
+                }
+            }
+            
+            // Squad shooting
+            s.shootCD--;
+            if (s.shootCD <= 0) {
+                const target = enemies.find(e => e.hp > 0 && Math.abs(e.x - s.x) < 200);
+                if (target) {
+                    s.shootCD = 25 + Math.random() * 15;
+                    const dx = target.x - s.x, dy = target.y - s.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    bullets.push({ x: s.x + s.w/2, y: s.y + s.h/2, vx: dx/dist * 8, vy: dy/dist * 8, owner: 'squad', col: s.col });
+                }
+            }
+        });
+        
+        // Enemy AI
+        enemies.forEach(e => {
+            if (e.hp <= 0) return;
+            
+            e.x += e.vx * e.dir;
+            if (e.x < 100 || e.x > lvlW - 50) e.dir *= -1;
+            
+            const targets = [player, ...squad.filter(s => s.hp > 0)];
+            const nearest = targets.reduce((a, b) => Math.abs(b.x - e.x) < Math.abs(a.x - e.x) ? b : a);
+            
+            if (Math.abs(nearest.x - e.x) < 200) {
+                e.shootCD--;
+                if (e.shootCD <= 0) {
+                    e.shootCD = 70 + Math.random() * 40;
+                    const dx = nearest.x - e.x, dy = nearest.y - e.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    bullets.push({ x: e.x + e.w/2, y: e.y + e.h/2, vx: dx/dist * 5, vy: dy/dist * 5, owner: 'enemy' });
+                }
+            }
+        });
+        
+        // Bullets
+        bullets = bullets.filter(b => {
+            b.x += b.vx; b.y += b.vy;
+            if (b.x < camera.x - 50 || b.x > camera.x + W + 50) return false;
+            
+            if (b.owner === 'player' || b.owner === 'squad') {
+                enemies.forEach(e => {
+                    if (e.hp > 0 && b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
+                        e.hp--; b.vx = 0;
+                        for (let i = 0; i < 4; i++) particles.push({ x: b.x, y: b.y, vx: (Math.random()-0.5)*3, vy: (Math.random()-0.5)*3, life: 12, col: '#f44' });
+                    }
+                });
+            } else {
+                // Hit player
+                if (!player.inCover && b.x > player.x && b.x < player.x + player.w && b.y > player.y && b.y < player.y + player.h) {
+                    player.hp -= 10; b.vx = 0;
+                    if (player.hp <= 0) state = ST.LOSE;
+                }
+                // Hit squad
+                squad.forEach(s => {
+                    if (s.hp > 0 && b.x > s.x && b.x < s.x + s.w && b.y > s.y && b.y < s.y + s.h) {
+                        s.hp -= 15; b.vx = 0;
+                    }
+                });
+            }
+            return b.vx !== 0;
+        });
+        
+        particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life--; return p.life > 0; });
+        
+        if (enemies.every(e => e.hp <= 0)) state = ST.WIN;
+        if (player.hp <= 0 && squad.every(s => s.hp <= 0)) state = ST.LOSE;
+    }
+    
+    pSquad = touch.squad;
+    pCover = touch.cover;
+}
+
+function draw() {
+    ctx.fillStyle = COL.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(scale, scale);
+    
+    if (state === ST.TITLE) drawTitle();
+    else if (state === ST.SELECT) drawSelect();
+    else if (state === ST.PLAY) drawGame();
+    else if (state === ST.WIN) drawWin();
+    else if (state === ST.LOSE) drawLose();
+    else if (state === ST.DONE) drawDone();
+    
+    ctx.restore();
+}
+
+function drawTitle() {
+    ctx.fillStyle = COL.gold;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('THE SPARROWS', W/2, 55);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = COL.blue;
+    ctx.fillText('SEASON 6', W/2, 75);
+    ctx.fillStyle = COL.text;
+    ctx.fillText('REUNION', W/2, 95);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(140 + i * 40, 115, 14, 22); }
+    ctx.fillStyle = COL.gold;
+    if (timer % 60 < 40) ctx.fillText('TAP TO START', W/2, 185);
+}
+
+function drawSelect() {
+    ctx.fillStyle = COL.text;
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SELECT LEADER', W/2, 40);
+    for (let i = 0; i < 4; i++) {
+        const sel = i === charIdx;
+        if (sel) { ctx.fillStyle = COL.gold; ctx.fillRect(120 + i * 50 - 3, 57, 28, 42); }
+        ctx.fillStyle = CHARS[i].col;
+        ctx.fillRect(120 + i * 50, 60, 22, 36);
+        if (sel) { ctx.fillStyle = COL.text; ctx.fillText(CHARS[i].name, W/2, 120); }
+    }
+    ctx.fillStyle = COL.blue;
+    ctx.font = '10px sans-serif';
+    ctx.fillText('TAP FIRE TO START', W/2, 170);
+}
+
+function drawGame() {
+    ctx.save();
+    ctx.translate(-camera.x, 0);
+    
+    ctx.fillStyle = COL.floor;
+    ctx.fillRect(0, 0, lvlW, H);
+    
+    // Covers
+    ctx.fillStyle = COL.wall;
+    covers.forEach(c => ctx.fillRect(c.x, c.y, c.w, c.h));
+    
+    // Enemies
+    enemies.forEach(e => {
+        if (e.hp <= 0) return;
+        ctx.fillStyle = COL.enemy;
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+    });
+    
+    // Squad
+    squad.forEach(s => {
+        if (s.hp <= 0) return;
+        ctx.fillStyle = s.col;
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+        ctx.fillStyle = '#040';
+        ctx.fillRect(s.x, s.y - 5, s.w, 3);
+        ctx.fillStyle = '#0c0';
+        ctx.fillRect(s.x, s.y - 5, s.w * (s.hp / 80), 3);
+    });
+    
+    // Player
+    ctx.fillStyle = player.inCover ? '#888' : CHARS[charIdx].col;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    if (player.inCover) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(player.x - 2, player.y - 2, player.w + 4, player.h + 4);
+    }
+    
+    // Bullets
+    bullets.forEach(b => {
+        ctx.fillStyle = b.owner === 'enemy' ? '#f44' : (b.col || '#ff0');
+        ctx.fillRect(b.x - 2, b.y - 1, 5, 2);
+    });
+    
+    // Particles
+    particles.forEach(p => {
+        ctx.fillStyle = p.col;
+        ctx.globalAlpha = p.life / 12;
+        ctx.fillRect(p.x - 1, p.y - 1, 3, 3);
+    });
+    ctx.globalAlpha = 1;
+    
+    ctx.restore();
+    
+    // UI
+    ctx.fillStyle = '#000c';
+    ctx.fillRect(0, 0, W, 26);
+    
+    ctx.fillStyle = COL.text;
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(CHARS[charIdx].name, 8, 11);
+    
+    ctx.fillStyle = '#300';
+    ctx.fillRect(60, 4, 70, 7);
+    ctx.fillStyle = player.hp > 30 ? '#0a0' : '#a00';
+    ctx.fillRect(60, 4, 70 * (player.hp / 100), 7);
+    
+    ctx.fillStyle = COL.gold;
+    ctx.fillText('AMMO: ' + player.ammo, 140, 11);
+    
+    // Squad status
+    ctx.fillStyle = squadMode === 'follow' ? '#0af' : squadMode === 'hold' ? '#fa0' : '#f00';
+    ctx.fillText('SQUAD: ' + squadMode.toUpperCase(), 8, 22);
+    
+    // Squad health bars
+    let sx = 100;
+    squad.forEach(s => {
+        ctx.fillStyle = s.hp > 0 ? s.col : '#444';
+        ctx.fillRect(sx, 15, 20, 8);
+        if (s.hp > 0) {
+            ctx.fillStyle = '#040';
+            ctx.fillRect(sx, 15, 20, 8);
+            ctx.fillStyle = '#0c0';
+            ctx.fillRect(sx, 15, 20 * (s.hp / 80), 8);
+        }
+        sx += 25;
+    });
+    
+    ctx.textAlign = 'right';
+    const rem = enemies.filter(e => e.hp > 0).length;
+    ctx.fillStyle = COL.text;
+    ctx.fillText('HOSTILES: ' + rem, W - 8, 16);
+}
+
+function drawWin() {
+    ctx.fillStyle = '#48c848';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('OBJECTIVE COMPLETE', W/2, 90);
+    ctx.fillStyle = COL.text;
+    ctx.font = '11px sans-serif';
+    if (timer % 60 < 40) ctx.fillText('TAP TO CONTINUE', W/2, 140);
+}
+
+function drawLose() {
+    ctx.fillStyle = COL.enemy;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SQUAD DOWN', W/2, 95);
+    ctx.fillStyle = COL.text;
+    ctx.font = '11px sans-serif';
+    if (timer % 60 < 40) ctx.fillText('TAP TO RETRY', W/2, 140);
+}
+
+function drawDone() {
+    ctx.fillStyle = COL.gold;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SEASON 6 COMPLETE', W/2, 55);
+    ctx.fillStyle = COL.text;
+    ctx.font = '10px sans-serif';
+    ctx.fillText('THE SPARROWS ARE REUNITED', W/2, 85);
+    ctx.fillText('TOGETHER THEY STAND STRONGER', W/2, 100);
+    ctx.fillText('THE FINAL BATTLE APPROACHES', W/2, 120);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(140 + i * 40, 140, 14, 22); }
+    if (timer % 60 < 40) ctx.fillText('TAP FOR MENU', W/2, 200);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

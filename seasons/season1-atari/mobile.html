@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>THE SPARROWS - Season 1: The Awakening (Mobile)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            width: 100%; height: 100%; overflow: hidden; 
+            background: #000; 
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #gameContainer {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        #gameCanvas { 
+            background: #000;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        #controls {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 140px;
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            pointer-events: none;
+        }
+        .dpad {
+            width: 120px; height: 120px;
+            position: relative;
+            pointer-events: auto;
+        }
+        .dpad-btn {
+            position: absolute;
+            width: 40px; height: 40px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; color: rgba(255,255,255,0.6);
+        }
+        .dpad-btn:active, .dpad-btn.active {
+            background: rgba(255,255,255,0.35);
+            border-color: rgba(255,255,255,0.6);
+        }
+        .dpad-up { top: 0; left: 40px; }
+        .dpad-down { bottom: 0; left: 40px; }
+        .dpad-left { top: 40px; left: 0; }
+        .dpad-right { top: 40px; right: 0; }
+        .action-btns {
+            display: flex; gap: 15px; align-items: center;
+            pointer-events: auto;
+        }
+        .action-btn {
+            width: 70px; height: 70px;
+            background: rgba(200,80,80,0.25);
+            border: 3px solid rgba(200,80,80,0.5);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: bold;
+            color: rgba(255,255,255,0.7);
+            font-family: sans-serif;
+        }
+        .action-btn:active, .action-btn.active {
+            background: rgba(200,80,80,0.5);
+            border-color: rgba(200,80,80,0.8);
+        }
+        #startBtn {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 24px;
+            background: rgba(139,115,85,0.8);
+            border: 3px solid #8b7355;
+            color: #fff;
+            border-radius: 10px;
+            display: none;
+            z-index: 100;
+        }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    
+    <div id="controls" class="hide">
+        <div class="dpad">
+            <div class="dpad-btn dpad-up" data-dir="up">▲</div>
+            <div class="dpad-btn dpad-down" data-dir="down">▼</div>
+            <div class="dpad-btn dpad-left" data-dir="left">◀</div>
+            <div class="dpad-btn dpad-right" data-dir="right">▶</div>
+        </div>
+        <div class="action-btns">
+            <div class="action-btn" id="actionBtn">ACT</div>
+        </div>
+    </div>
+    
+    <button id="startBtn">TAP TO START</button>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const controls = document.getElementById('controls');
+const startBtn = document.getElementById('startBtn');
+
+// Atari 2600 resolution
+const W = 160, H = 192;
+let scale = 1;
+
+function resize() {
+    const controlsHeight = 140;
+    const availH = window.innerHeight - controlsHeight;
+    const availW = window.innerWidth;
+    scale = Math.min(Math.floor(availW / W), Math.floor(availH / H));
+    scale = Math.max(2, scale);
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    ctx.imageSmoothingEnabled = false;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Atari colors
+const COL = {
+    bg: '#1a1a2e', wall: '#8b7355', floor: '#2d2d44',
+    player: '#50b8d8', enemy: '#c84848', goal: '#48c848',
+    ui: '#8b7355', text: '#d4a050'
+};
+
+// Touch state
+const touch = { up: false, down: false, left: false, right: false, action: false };
+
+// Game state
+const ST = { TITLE: 0, SELECT: 1, BRIEF: 2, PLAY: 3, WIN: 4, LOSE: 5, COMPLETE: 6 };
+let state = ST.TITLE;
+let charIdx = 0;
+let mission = 0;
+let timer = 0;
+
+const CHARS = [
+    { name: 'CIPHER', col: '#50b8d8' },
+    { name: 'VENOM', col: '#58b868' },
+    { name: 'HAWK', col: '#d88848' },
+    { name: 'ORACLE', col: '#c8a040' }
+];
+
+const MISSIONS = [
+    { name: 'FIRST TEST', brief: 'REACH THE EXIT', enemies: 2 },
+    { name: 'EVASION', brief: 'AVOID DETECTION', enemies: 3 },
+    { name: 'TEAMWORK', brief: 'WORK TOGETHER', enemies: 4 },
+    { name: 'GRADUATION', brief: 'PROVE YOURSELF', enemies: 5 }
+];
+
+let player = { x: 20, y: H - 30, w: 8, h: 12, vx: 0, vy: 0 };
+let enemies = [];
+let goal = { x: W - 25, y: 20, w: 12, h: 12 };
+let walls = [];
+let detected = false;
+let detectionTimer = 0;
+
+function initMission() {
+    player.x = 20; player.y = H - 30;
+    enemies = [];
+    walls = [];
+    detected = false;
+    detectionTimer = 0;
+    
+    // Generate walls
+    for (let i = 0; i < 3 + mission; i++) {
+        walls.push({
+            x: 30 + Math.random() * (W - 70),
+            y: 30 + Math.random() * (H - 80),
+            w: 20 + Math.random() * 30,
+            h: 8
+        });
+    }
+    
+    // Generate enemies
+    for (let i = 0; i < MISSIONS[mission].enemies; i++) {
+        enemies.push({
+            x: 50 + Math.random() * (W - 80),
+            y: 30 + Math.random() * (H - 80),
+            dir: Math.random() > 0.5 ? 1 : -1,
+            speed: 0.3 + Math.random() * 0.2,
+            range: 25 + Math.random() * 15
+        });
+    }
+    
+    goal.x = W - 25;
+    goal.y = 20 + Math.random() * 30;
+}
+
+// Touch controls
+function setupTouch() {
+    const dpadBtns = document.querySelectorAll('.dpad-btn');
+    const actionBtn = document.getElementById('actionBtn');
+    
+    function handleTouch(e, isStart) {
+        e.preventDefault();
+        const target = e.target;
+        if (target.dataset.dir) {
+            touch[target.dataset.dir] = isStart;
+            target.classList.toggle('active', isStart);
+        }
+    }
+    
+    dpadBtns.forEach(btn => {
+        btn.addEventListener('touchstart', e => handleTouch(e, true));
+        btn.addEventListener('touchend', e => handleTouch(e, false));
+        btn.addEventListener('touchcancel', e => handleTouch(e, false));
+    });
+    
+    actionBtn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        touch.action = true;
+        actionBtn.classList.add('active');
+    });
+    actionBtn.addEventListener('touchend', e => {
+        e.preventDefault();
+        touch.action = false;
+        actionBtn.classList.remove('active');
+    });
+    
+    // Start button
+    startBtn.addEventListener('click', () => {
+        startBtn.classList.add('hide');
+        controls.classList.remove('hide');
+        if (state === ST.TITLE) state = ST.SELECT;
+    });
+    
+    // Tap anywhere for state transitions
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (state === ST.SELECT) {
+            touch.action = true;
+        } else if (state === ST.BRIEF || state === ST.WIN || state === ST.LOSE) {
+            state = state === ST.BRIEF ? ST.PLAY : (state === ST.WIN ? (mission < 3 ? ST.BRIEF : ST.COMPLETE) : ST.BRIEF);
+            if (state === ST.PLAY || state === ST.BRIEF) initMission();
+        } else if (state === ST.COMPLETE) {
+            state = ST.TITLE;
+            mission = 0;
+        }
+    });
+}
+setupTouch();
+
+// Keyboard fallback
+const keys = {};
+document.addEventListener('keydown', e => keys[e.code] = true);
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+function getInput() {
+    return {
+        up: touch.up || keys['ArrowUp'] || keys['KeyW'],
+        down: touch.down || keys['ArrowDown'] || keys['KeyS'],
+        left: touch.left || keys['ArrowLeft'] || keys['KeyA'],
+        right: touch.right || keys['ArrowRight'] || keys['KeyD'],
+        action: touch.action || keys['Space'] || keys['Enter']
+    };
+}
+
+function update() {
+    timer++;
+    const input = getInput();
+    
+    switch (state) {
+        case ST.TITLE:
+            startBtn.style.display = 'block';
+            break;
+            
+        case ST.SELECT:
+            if (input.left && timer % 15 === 0) charIdx = (charIdx + 3) % 4;
+            if (input.right && timer % 15 === 0) charIdx = (charIdx + 1) % 4;
+            if (input.action) {
+                state = ST.BRIEF;
+                initMission();
+                touch.action = false;
+            }
+            break;
+            
+        case ST.PLAY:
+            // Player movement
+            player.vx = 0;
+            player.vy = 0;
+            if (input.up) player.vy = -1.5;
+            if (input.down) player.vy = 1.5;
+            if (input.left) player.vx = -1.5;
+            if (input.right) player.vx = 1.5;
+            
+            player.x += player.vx;
+            player.y += player.vy;
+            
+            // Bounds
+            player.x = Math.max(4, Math.min(W - player.w - 4, player.x));
+            player.y = Math.max(20, Math.min(H - player.h - 4, player.y));
+            
+            // Wall collision
+            walls.forEach(w => {
+                if (player.x < w.x + w.w && player.x + player.w > w.x &&
+                    player.y < w.y + w.h && player.y + player.h > w.y) {
+                    if (player.vx > 0) player.x = w.x - player.w;
+                    if (player.vx < 0) player.x = w.x + w.w;
+                    if (player.vy > 0) player.y = w.y - player.h;
+                    if (player.vy < 0) player.y = w.y + w.h;
+                }
+            });
+            
+            // Enemy AI
+            enemies.forEach(e => {
+                e.x += e.dir * e.speed;
+                if (e.x < 10 || e.x > W - 20) e.dir *= -1;
+                
+                // Detection
+                const dx = player.x - e.x;
+                const dy = player.y - e.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < e.range) {
+                    detected = true;
+                    detectionTimer = 60;
+                }
+            });
+            
+            if (detectionTimer > 0) {
+                detectionTimer--;
+                if (detectionTimer <= 0 && detected) {
+                    state = ST.LOSE;
+                }
+            }
+            
+            // Goal check
+            if (player.x < goal.x + goal.w && player.x + player.w > goal.x &&
+                player.y < goal.y + goal.h && player.y + player.h > goal.y) {
+                state = ST.WIN;
+                mission++;
+            }
+            break;
+    }
+}
+
+function draw() {
+    // Clear with scale
+    ctx.fillStyle = COL.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.save();
+    ctx.scale(scale, scale);
+    
+    switch (state) {
+        case ST.TITLE:
+            drawTitle();
+            break;
+        case ST.SELECT:
+            drawSelect();
+            break;
+        case ST.BRIEF:
+            drawBrief();
+            break;
+        case ST.PLAY:
+            drawGame();
+            break;
+        case ST.WIN:
+            drawWin();
+            break;
+        case ST.LOSE:
+            drawLose();
+            break;
+        case ST.COMPLETE:
+            drawComplete();
+            break;
+    }
+    
+    ctx.restore();
+}
+
+function drawTitle() {
+    ctx.fillStyle = COL.text;
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('THE SPARROWS', W/2, 50);
+    ctx.font = '6px monospace';
+    ctx.fillText('SEASON 1', W/2, 65);
+    ctx.fillStyle = COL.ui;
+    ctx.fillText('THE AWAKENING', W/2, 80);
+    
+    // Draw 4 characters
+    for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = CHARS[i].col;
+        ctx.fillRect(35 + i * 25, 100, 8, 12);
+    }
+    
+    ctx.fillStyle = COL.text;
+    ctx.fillText('TAP TO START', W/2, 150);
+}
+
+function drawSelect() {
+    ctx.fillStyle = COL.text;
+    ctx.font = '6px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SELECT OPERATIVE', W/2, 30);
+    
+    // Draw characters
+    for (let i = 0; i < 4; i++) {
+        const sel = i === charIdx;
+        ctx.fillStyle = sel ? '#fff' : '#333';
+        ctx.fillRect(28 + i * 30 - 2, 58, 16, 26);
+        ctx.fillStyle = CHARS[i].col;
+        ctx.fillRect(30 + i * 30, 60, 12, 22);
+        
+        if (sel) {
+            ctx.fillStyle = COL.text;
+            ctx.fillText(CHARS[i].name, W/2, 110);
+            ctx.fillStyle = '#fff';
+            ctx.fillText('▼', 36 + i * 30, 55);
+        }
+    }
+    
+    ctx.fillStyle = COL.ui;
+    ctx.fillText('< SWIPE TO SELECT >', W/2, 140);
+    ctx.fillText('TAP TO CONFIRM', W/2, 155);
+}
+
+function drawBrief() {
+    ctx.fillStyle = COL.text;
+    ctx.font = '6px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('MISSION ' + (mission + 1), W/2, 40);
+    ctx.fillStyle = COL.ui;
+    ctx.fillText(MISSIONS[mission].name, W/2, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = '5px monospace';
+    ctx.fillText(MISSIONS[mission].brief, W/2, 90);
+    
+    ctx.fillStyle = CHARS[charIdx].col;
+    ctx.fillRect(W/2 - 4, 110, 8, 12);
+    
+    ctx.fillStyle = COL.text;
+    ctx.font = '6px monospace';
+    ctx.fillText('TAP TO START', W/2, 160);
+}
+
+function drawGame() {
+    // UI bar
+    ctx.fillStyle = COL.ui;
+    ctx.fillRect(0, 0, W, 16);
+    ctx.fillStyle = '#000';
+    ctx.font = '5px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('M' + (mission + 1) + ' ' + CHARS[charIdx].name, 4, 10);
+    
+    // Floor
+    ctx.fillStyle = COL.floor;
+    ctx.fillRect(0, 16, W, H - 16);
+    
+    // Goal
+    ctx.fillStyle = COL.goal;
+    ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+    ctx.fillStyle = '#000';
+    ctx.font = '5px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('EXIT', goal.x + goal.w/2, goal.y + 8);
+    
+    // Walls
+    ctx.fillStyle = COL.wall;
+    walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+    
+    // Enemies
+    enemies.forEach(e => {
+        ctx.fillStyle = COL.enemy;
+        ctx.fillRect(e.x, e.y, 10, 10);
+        // Vision cone
+        ctx.fillStyle = 'rgba(200,72,72,0.2)';
+        ctx.beginPath();
+        ctx.arc(e.x + 5, e.y + 5, e.range, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Player
+    ctx.fillStyle = CHARS[charIdx].col;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    
+    // Detection warning
+    if (detected && timer % 10 < 5) {
+        ctx.fillStyle = '#c84848';
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('DETECTED!', W/2, H/2);
+    }
+}
+
+function drawWin() {
+    ctx.fillStyle = COL.goal;
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('MISSION', W/2, 70);
+    ctx.fillText('COMPLETE', W/2, 85);
+    ctx.fillStyle = COL.text;
+    ctx.font = '6px monospace';
+    ctx.fillText('TAP TO CONTINUE', W/2, 130);
+}
+
+function drawLose() {
+    ctx.fillStyle = COL.enemy;
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('MISSION', W/2, 70);
+    ctx.fillText('FAILED', W/2, 85);
+    ctx.fillStyle = COL.text;
+    ctx.font = '6px monospace';
+    ctx.fillText('TAP TO RETRY', W/2, 130);
+}
+
+function drawComplete() {
+    ctx.fillStyle = COL.text;
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SEASON 1', W/2, 50);
+    ctx.fillText('COMPLETE', W/2, 65);
+    
+    ctx.fillStyle = COL.ui;
+    ctx.font = '5px monospace';
+    ctx.fillText('THE FOUR RECRUITS', W/2, 90);
+    ctx.fillText('HAVE PROVEN THEMSELVES', W/2, 100);
+    ctx.fillText('THEIR TRAINING CONTINUES...', W/2, 115);
+    
+    for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = CHARS[i].col;
+        ctx.fillRect(35 + i * 25, 130, 8, 12);
+    }
+    
+    ctx.fillStyle = COL.text;
+    ctx.font = '6px monospace';
+    ctx.fillText('TAP FOR MENU', W/2, 175);
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>

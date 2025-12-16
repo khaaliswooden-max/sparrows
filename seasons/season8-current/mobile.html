@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>THE SPARROWS - Season 8: Resolution (Mobile)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; }
+        #gameCanvas { display: block; }
+        #controls { position: fixed; bottom: 0; left: 0; right: 0; height: 115px; display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; }
+        #joystick { width: 85px; height: 85px; background: rgba(212,160,80,0.2); border: 2px solid rgba(212,160,80,0.4); border-radius: 50%; position: relative; }
+        #joystickKnob { width: 34px; height: 34px; background: rgba(212,160,80,0.6); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        .char-btns { display: flex; flex-direction: column; gap: 4px; }
+        .char-btn { width: 38px; height: 22px; border-radius: 4px; font-size: 7px; font-weight: bold; color: #fff; border: 1px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; }
+        .char-btn.active { border-width: 2px; filter: brightness(1.3); }
+        .action-btns { display: flex; gap: 6px; align-items: flex-end; }
+        .action-btn { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: bold; color: rgba(255,255,255,0.9); font-family: sans-serif; }
+        .btn-shoot { background: rgba(200,72,72,0.4); border: 3px solid rgba(200,72,72,0.7); width: 55px; height: 55px; font-size: 9px; }
+        .btn-ability { background: rgba(72,200,200,0.3); border: 2px solid rgba(72,200,200,0.6); width: 42px; height: 42px; }
+        .btn-ult { background: rgba(212,160,80,0.3); border: 2px solid rgba(212,160,80,0.6); width: 42px; height: 42px; }
+        .action-btn.pressed { filter: brightness(1.4); }
+        #startOverlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        #startBtn { padding: 18px 36px; font-size: 16px; background: rgba(212,160,80,0.8); border: 3px solid #d4a050; color: #fff; border-radius: 10px; }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="controls" class="hide">
+        <div id="joystick"><div id="joystickKnob"></div></div>
+        <div class="char-btns">
+            <div class="char-btn" id="char0" style="background:#50b8d8">CIP</div>
+            <div class="char-btn" id="char1" style="background:#58b868">VEN</div>
+            <div class="char-btn" id="char2" style="background:#d88848">HWK</div>
+            <div class="char-btn" id="char3" style="background:#c8a040">ORC</div>
+        </div>
+        <div class="action-btns">
+            <div class="action-btn btn-ability" id="btnAbility">SKILL</div>
+            <div class="action-btn btn-ult" id="btnUlt">ULT</div>
+            <div class="action-btn btn-shoot" id="btnShoot">FIRE</div>
+        </div>
+    </div>
+    <div id="startOverlay"><button id="startBtn">TAP TO START</button></div>
+<script>
+const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+const W = 512, H = 288; let scale = 1;
+function resize() { const ch = 115, ah = window.innerHeight - ch; scale = Math.min(window.innerWidth / W, ah / H); canvas.width = W * scale; canvas.height = H * scale; canvas.style.marginTop = Math.max(0, (ah - H * scale) / 2) + 'px'; }
+resize(); window.addEventListener('resize', resize);
+const COL = { bg: '#030305', floor: '#0a0a12', enemy: '#c84848', text: '#e8e8e8', gold: '#d4a050' };
+const joy = { x: 0, y: 0 }, touch = { shoot: false, ability: false, ult: false };
+const ST = { TITLE: 0, SELECT: 1, PLAY: 2, WIN: 3, LOSE: 4, CREDITS: 5 };
+let state = ST.TITLE, activeChar = 0, mission = 0, timer = 0, dialogIdx = 0, dialogTimer = 0;
+
+const CHARS = [
+    { name: 'CIPHER', col: '#50b8d8', ability: 'EMP', hp: 100, dmg: 1 },
+    { name: 'VENOM', col: '#58b868', ability: 'TOXIN', hp: 90, dmg: 1.2 },
+    { name: 'HAWK', col: '#d88848', ability: 'MARK', hp: 85, dmg: 1.5 },
+    { name: 'ORACLE', col: '#c8a040', ability: 'SLOW', hp: 95, dmg: 1 }
+];
+
+const DIALOGS = [
+    [{ s: 'CIPHER', t: 'This is it. Twenty years of training.' }, { s: 'VENOM', t: 'Phoenix will pay for everything.' }, { s: 'HAWK', t: 'Lock and load, sisters.' }, { s: 'ORACLE', t: 'I foresee our victory.' }],
+    [{ s: 'PHOENIX', t: 'You cannot stop what is coming!' }, { s: 'CIPHER', t: 'Watch us.' }],
+    [{ s: 'PHOENIX', t: 'I made you what you are!' }, { s: 'VENOM', t: 'And now we unmake you.' }],
+    [{ s: 'PHOENIX', t: 'NOOOO!' }, { s: 'CIPHER', t: 'It is done. We are finally free.' }]
+];
+
+let team = [], enemies = [], bullets = [], particles = [], camera = { x: 0 }, lvlW = 1200;
+
+function initLevel() {
+    team = CHARS.map((c, i) => ({ x: 40 + i * 25, y: 120 + i * 20, w: 14, h: 24, hp: c.hp, maxHp: c.hp, ammo: 40, face: 1, shootCD: 0, abilityCD: 0, ultCharge: 0, alive: true, col: c.col, name: c.name, ability: c.ability, dmg: c.dmg }));
+    activeChar = 0; enemies = []; bullets = []; particles = []; camera.x = 0;
+    lvlW = 1000 + mission * 300; dialogIdx = 0; dialogTimer = 0;
+    
+    const isFinal = mission === 3;
+    for (let i = 0; i < (isFinal ? 15 : 8 + mission * 3); i++) {
+        enemies.push({ x: 300 + i * 60, y: 50 + Math.random() * 180, w: 14, h: 22, hp: 3, mhp: 3, dir: 1, shootCD: 50 + Math.random() * 50, stunned: 0 });
+    }
+    if (isFinal) {
+        for (let i = 0; i < 3; i++) {
+            enemies.push({ x: lvlW - 200 + i * 50, y: 80 + i * 60, w: 28, h: 36, hp: 40, mhp: 40, dir: -1, shootCD: 30, boss: true, phoenix: true, phase: i + 1 });
+        }
+    }
+}
+
+// Controls
+const joystickEl = document.getElementById('joystick'), knob = document.getElementById('joystickKnob');
+joystickEl.addEventListener('touchstart', e => { e.preventDefault(); updateJoy(e); });
+joystickEl.addEventListener('touchmove', e => { e.preventDefault(); updateJoy(e); });
+joystickEl.addEventListener('touchend', e => { e.preventDefault(); joy.x = 0; joy.y = 0; knob.style.left = '50%'; knob.style.top = '50%'; });
+function updateJoy(e) { const rect = joystickEl.getBoundingClientRect(), cx = rect.left + rect.width/2, cy = rect.top + rect.height/2; let dx = e.touches[0].clientX - cx, dy = e.touches[0].clientY - cy; const dist = Math.sqrt(dx*dx + dy*dy), maxD = rect.width/2 - 17; if (dist > maxD) { dx = dx/dist*maxD; dy = dy/dist*maxD; } knob.style.left = (50 + dx/maxD*25) + '%'; knob.style.top = (50 + dy/maxD*25) + '%'; joy.x = dx/maxD; joy.y = dy/maxD; }
+
+for (let i = 0; i < 4; i++) { document.getElementById('char' + i).addEventListener('touchstart', e => { e.preventDefault(); if (team[i] && team[i].alive) { activeChar = i; updateCharBtns(); } }); }
+function updateCharBtns() { for (let i = 0; i < 4; i++) { const el = document.getElementById('char' + i); el.classList.toggle('active', i === activeChar); el.style.opacity = team[i] && team[i].alive ? '1' : '0.3'; } }
+
+['Shoot', 'Ability', 'Ult'].forEach(b => { const el = document.getElementById('btn' + b); el.addEventListener('touchstart', e => { e.preventDefault(); touch[b.toLowerCase()] = true; el.classList.add('pressed'); }); el.addEventListener('touchend', e => { e.preventDefault(); touch[b.toLowerCase()] = false; el.classList.remove('pressed'); }); });
+document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('startOverlay').classList.add('hide'); document.getElementById('controls').classList.remove('hide'); state = ST.SELECT; });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); if (state === ST.WIN) { mission++; state = mission >= 4 ? ST.CREDITS : ST.PLAY; if (state === ST.PLAY) initLevel(); } else if (state === ST.LOSE) { state = ST.PLAY; initLevel(); } else if (state === ST.CREDITS && timer > 200) { state = ST.TITLE; mission = 0; } });
+
+let pAbility = false, pUlt = false;
+function update() {
+    timer++;
+    updateCharBtns();
+    
+    if (state === ST.SELECT) { if (joy.x < -0.5 && timer % 10 === 0) activeChar = (activeChar + 3) % 4; if (joy.x > 0.5 && timer % 10 === 0) activeChar = (activeChar + 1) % 4; if (touch.shoot) { state = ST.PLAY; initLevel(); } }
+    
+    if (state === ST.PLAY) {
+        const p = team[activeChar];
+        if (!p || !p.alive) { const alive = team.findIndex(t => t.alive); if (alive >= 0) activeChar = alive; else { state = ST.LOSE; return; } }
+        
+        // Movement
+        p.x += joy.x * 2.5; p.y += joy.y * 2.5;
+        if (joy.x !== 0) p.face = joy.x > 0 ? 1 : -1;
+        p.x = Math.max(10, Math.min(lvlW - p.w - 10, p.x));
+        p.y = Math.max(35, Math.min(H - p.h - 10, p.y));
+        
+        camera.x = Math.max(0, Math.min(lvlW - W, p.x - W/3));
+        
+        // AI teammates follow
+        team.forEach((t, i) => {
+            if (i === activeChar || !t.alive) return;
+            const tx = p.x - 30 - (i - activeChar) * 20, ty = p.y + (i - activeChar) * 15;
+            t.x += (tx - t.x) * 0.05; t.y += (ty - t.y) * 0.05;
+            t.face = p.face;
+            
+            // AI shooting
+            t.shootCD--;
+            if (t.shootCD <= 0) {
+                const target = enemies.find(e => e.hp > 0 && Math.abs(e.x - t.x) < 200);
+                if (target) {
+                    t.shootCD = 20;
+                    const dx = target.x - t.x, dy = target.y - t.y, dist = Math.sqrt(dx*dx + dy*dy);
+                    bullets.push({ x: t.x + t.w/2, y: t.y + t.h/2, vx: dx/dist * 10, vy: dy/dist * 10, owner: 'player', dmg: t.dmg, col: t.col });
+                }
+            }
+        });
+        
+        // Find target for active player
+        let target = null, tDist = 250;
+        enemies.forEach(e => { if (e.hp <= 0) return; const d = Math.sqrt((e.x-p.x)**2 + (e.y-p.y)**2); if (d < tDist) { tDist = d; target = e; } });
+        
+        if (p.shootCD > 0) p.shootCD--;
+        if (p.abilityCD > 0) p.abilityCD--;
+        
+        // Shooting
+        if (touch.shoot && p.shootCD <= 0 && p.ammo > 0) {
+            p.shootCD = 5; p.ammo--;
+            let tx = target ? target.x + target.w/2 : p.x + p.face * 300;
+            let ty = target ? target.y + target.h/2 : p.y + p.h/2;
+            const dx = tx - p.x, dy = ty - (p.y + p.h/2), dist = Math.sqrt(dx*dx + dy*dy);
+            bullets.push({ x: p.x + p.w/2, y: p.y + p.h/2, vx: dx/dist * 12, vy: dy/dist * 12, owner: 'player', dmg: p.dmg, col: p.col });
+            p.ultCharge = Math.min(100, p.ultCharge + 2);
+        }
+        
+        // Ability
+        if (touch.ability && !pAbility && p.abilityCD <= 0) {
+            p.abilityCD = 150;
+            const idx = CHARS.findIndex(c => c.name === p.name);
+            if (idx === 0) enemies.forEach(e => { if (e.hp > 0 && Math.abs(e.x - p.x) < 140) e.stunned = 80; });
+            else if (idx === 1) { for (let i = 0; i < 6; i++) particles.push({ x: p.x + p.face * 50, y: p.y - 15 + i * 12, vx: p.face * 0.4, vy: 0, life: 80, col: '#0f0', dmg: true }); }
+            else if (idx === 2) enemies.forEach(e => { if (e.hp > 0) e.marked = 100; });
+            else enemies.forEach(e => { if (e.hp > 0) e.slowed = 100; });
+        }
+        
+        // Ultimate
+        if (touch.ult && !pUlt && p.ultCharge >= 100) {
+            p.ultCharge = 0;
+            const idx = CHARS.findIndex(c => c.name === p.name);
+            enemies.forEach(e => { if (e.hp > 0) { e.hp -= idx === 1 ? 6 : 4; e.stunned = idx === 3 ? 200 : 60; } });
+            for (let i = 0; i < 15; i++) particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*7, vy: (Math.random()-0.5)*7, life: 25, col: p.col });
+        }
+        
+        // Enemies
+        enemies.forEach(e => {
+            if (e.hp <= 0) return;
+            if (e.stunned > 0) { e.stunned--; return; }
+            const spd = e.slowed > 0 ? 0.15 : (e.phoenix ? 0.8 : 0.4); if (e.slowed > 0) e.slowed--;
+            e.x += spd * e.dir; if (e.x < 100 || e.x > lvlW - 50) e.dir *= -1;
+            
+            const nearestT = team.filter(t => t.alive).reduce((a, b) => Math.abs(b.x - e.x) < Math.abs(a.x - e.x) ? b : a);
+            if (Math.abs(nearestT.x - e.x) < 220) {
+                e.shootCD--;
+                if (e.shootCD <= 0) {
+                    e.shootCD = e.phoenix ? 25 : 55 + Math.random() * 35;
+                    const dx = nearestT.x - e.x, dy = nearestT.y - e.y, dist = Math.sqrt(dx*dx+dy*dy);
+                    bullets.push({ x: e.x + e.w/2, y: e.y + e.h/2, vx: dx/dist * (e.phoenix ? 7 : 4), vy: dy/dist * (e.phoenix ? 7 : 4), owner: 'enemy', dmg: e.phoenix ? 15 : 8 });
+                }
+            }
+        });
+        
+        // Bullets
+        bullets = bullets.filter(b => {
+            b.x += b.vx; b.y += b.vy;
+            if (b.x < camera.x - 50 || b.x > camera.x + W + 50) return false;
+            if (b.owner === 'player') {
+                enemies.forEach(e => {
+                    if (e.hp > 0 && b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
+                        const dmg = (e.marked > 0 ? 2 : 1) * b.dmg;
+                        e.hp -= dmg; b.vx = 0;
+                        for (let i = 0; i < 3; i++) particles.push({ x: b.x, y: b.y, vx: (Math.random()-0.5)*3, vy: (Math.random()-0.5)*3, life: 10, col: b.col || '#f44' });
+                    }
+                });
+            } else {
+                team.forEach(t => {
+                    if (t.alive && b.x > t.x && b.x < t.x + t.w && b.y > t.y && b.y < t.y + t.h) {
+                        t.hp -= b.dmg; b.vx = 0;
+                        if (t.hp <= 0) { t.alive = false; for (let i = 0; i < 8; i++) particles.push({ x: t.x, y: t.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 20, col: t.col }); }
+                    }
+                });
+            }
+            return b.vx !== 0;
+        });
+        
+        particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life--; if (p.dmg) enemies.forEach(e => { if (e.hp > 0 && Math.abs(e.x - p.x) < 25 && Math.abs(e.y - p.y) < 25 && p.life % 12 === 0) e.hp--; }); return p.life > 0; });
+        
+        if (!team.some(t => t.alive)) state = ST.LOSE;
+        if (enemies.every(e => e.hp <= 0)) state = ST.WIN;
+    }
+    
+    pAbility = touch.ability; pUlt = touch.ult;
+}
+
+function draw() {
+    ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save(); ctx.scale(scale, scale);
+    
+    if (state === ST.TITLE) {
+        ctx.fillStyle = COL.gold; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('THE SPARROWS', W/2, 60);
+        ctx.font = '16px sans-serif'; ctx.fillText('SEASON 8', W/2, 85);
+        ctx.fillStyle = COL.text; ctx.fillText('RESOLUTION', W/2, 110);
+        for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(175 + i * 45, 130, 16, 28); }
+        ctx.fillStyle = COL.gold; ctx.font = '12px sans-serif';
+        if (timer % 60 < 40) ctx.fillText('TAP TO START', W/2, 210);
+        ctx.fillStyle = '#666'; ctx.font = '8px sans-serif'; ctx.fillText('ZUUP INNOVATION LAB / VISIONBLOX LLC', W/2, H - 10);
+    }
+    else if (state === ST.SELECT) {
+        ctx.fillStyle = COL.text; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('CHOOSE YOUR LEAD OPERATIVE', W/2, 40);
+        for (let i = 0; i < 4; i++) {
+            const sel = i === activeChar;
+            if (sel) { ctx.strokeStyle = COL.gold; ctx.lineWidth = 2; ctx.strokeRect(155 + i * 55 - 4, 56, 34, 54); }
+            ctx.fillStyle = CHARS[i].col; ctx.fillRect(155 + i * 55, 60, 26, 46);
+            if (sel) { ctx.fillStyle = COL.text; ctx.font = '11px sans-serif'; ctx.fillText(CHARS[i].name, W/2, 130); ctx.font = '9px sans-serif'; ctx.fillText('SKILL: ' + CHARS[i].ability, W/2, 148); }
+        }
+        ctx.fillStyle = COL.gold; ctx.font = '10px sans-serif';
+        ctx.fillText('TAP FIRE TO BEGIN THE FINAL MISSION', W/2, 200);
+    }
+    else if (state === ST.PLAY) {
+        ctx.save(); ctx.translate(-camera.x, 0);
+        ctx.fillStyle = COL.floor; ctx.fillRect(0, 0, lvlW, H);
+        
+        enemies.forEach(e => {
+            if (e.hp <= 0) return;
+            ctx.fillStyle = e.stunned > 0 ? '#555' : (e.marked > 0 ? '#ff0' : (e.phoenix ? '#a030a0' : COL.enemy));
+            ctx.fillRect(e.x, e.y, e.w, e.h);
+            if (e.boss || e.phoenix) { ctx.fillStyle = '#303'; ctx.fillRect(e.x - 5, e.y - 8, e.w + 10, 4); ctx.fillStyle = '#f0f'; ctx.fillRect(e.x - 5, e.y - 8, (e.w + 10) * (e.hp / e.mhp), 4); ctx.fillStyle = '#fff'; ctx.font = '6px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('PHOENIX-' + e.phase, e.x + e.w/2, e.y - 12); }
+            else if (e.hp < e.mhp) { ctx.fillStyle = '#300'; ctx.fillRect(e.x, e.y - 5, e.w, 2); ctx.fillStyle = '#f00'; ctx.fillRect(e.x, e.y - 5, e.w * (e.hp / e.mhp), 2); }
+        });
+        
+        team.forEach((t, i) => {
+            if (!t.alive) return;
+            ctx.fillStyle = i === activeChar ? t.col : t.col + '99';
+            ctx.fillRect(t.x, t.y, t.w, t.h);
+            if (i === activeChar) { ctx.strokeStyle = COL.gold; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(t.x + t.w/2, t.y + t.h/2, 18, 0, Math.PI * 2); ctx.stroke(); }
+        });
+        
+        bullets.forEach(b => { ctx.fillStyle = b.owner === 'player' ? (b.col || '#ff0') : '#f44'; ctx.fillRect(b.x - 2, b.y - 1, 5, 2); });
+        particles.forEach(p => { ctx.fillStyle = p.col; ctx.globalAlpha = p.life / 25; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }); ctx.globalAlpha = 1;
+        ctx.restore();
+        
+        // UI
+        ctx.fillStyle = '#000c'; ctx.fillRect(0, 0, W, 32);
+        team.forEach((t, i) => {
+            const x = 8 + i * 125;
+            ctx.fillStyle = t.alive ? t.col : '#444'; ctx.fillRect(x, 4, 10, 16);
+            ctx.fillStyle = '#333'; ctx.fillRect(x + 14, 4, 50, 6);
+            ctx.fillStyle = t.hp > t.maxHp * 0.3 ? '#0a0' : '#a00'; ctx.fillRect(x + 14, 4, 50 * (t.hp / t.maxHp), 6);
+            ctx.fillStyle = '#333'; ctx.fillRect(x + 14, 12, 50, 4);
+            ctx.fillStyle = COL.gold; ctx.fillRect(x + 14, 12, 50 * (t.ultCharge / 100), 4);
+            if (i === activeChar) { ctx.strokeStyle = COL.gold; ctx.lineWidth = 1; ctx.strokeRect(x - 2, 2, 72, 22); }
+        });
+        
+        ctx.textAlign = 'right'; ctx.fillStyle = COL.text; ctx.font = '9px sans-serif';
+        const p = team[activeChar];
+        if (p) ctx.fillText('AMMO: ' + p.ammo, W - 8, 14);
+        
+        const rem = enemies.filter(e => e.hp > 0).length;
+        ctx.textAlign = 'center'; ctx.fillText('HOSTILES: ' + rem, W/2, H - 6);
+    }
+    else if (state === ST.WIN) {
+        ctx.fillStyle = '#48c848'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(mission >= 3 ? 'PHOENIX DESTROYED' : 'SECTOR CLEAR', W/2, 100);
+        ctx.fillStyle = COL.text; ctx.font = '12px sans-serif';
+        if (timer % 60 < 40) ctx.fillText('TAP TO CONTINUE', W/2, 160);
+    }
+    else if (state === ST.LOSE) {
+        ctx.fillStyle = COL.enemy; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('MISSION FAILED', W/2, 100);
+        ctx.fillStyle = COL.text; ctx.font = '12px sans-serif';
+        if (timer % 60 < 40) ctx.fillText('TAP TO RETRY', W/2, 160);
+    }
+    else if (state === ST.CREDITS) {
+        const scroll = Math.max(0, (timer - 60) * 0.5);
+        ctx.save(); ctx.translate(0, -scroll);
+        let y = H + 30;
+        ctx.fillStyle = COL.gold; ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('THE SPARROWS', W/2, y); y += 30;
+        ctx.font = 'bold 16px sans-serif'; ctx.fillText('RESOLUTION', W/2, y); y += 50;
+        ctx.fillStyle = COL.text; ctx.font = '10px sans-serif';
+        ctx.fillText('Created by', W/2, y); y += 20;
+        ctx.fillStyle = COL.gold; ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('ZUUP INNOVATION LAB', W/2, y); y += 16;
+        ctx.fillText('VISIONBLOX LLC', W/2, y); y += 40;
+        ctx.fillStyle = COL.text; ctx.font = '10px sans-serif';
+        ctx.fillText('THE SPARROWS', W/2, y); y += 25;
+        CHARS.forEach((c, i) => { ctx.fillStyle = c.col; ctx.fillText(c.name, W/2, y); y += 16; });
+        y += 30;
+        ctx.fillStyle = '#888'; ctx.font = '9px sans-serif';
+        ctx.fillText('Eight seasons. One story.', W/2, y); y += 14;
+        ctx.fillText('Four sisters. Finally free.', W/2, y); y += 30;
+        ctx.fillStyle = COL.gold; ctx.fillText('Thank you for playing.', W/2, y); y += 40;
+        ctx.fillStyle = '#555'; ctx.font = '8px sans-serif';
+        ctx.fillText('© 2025 Zuup Innovation Lab / Visionblox LLC', W/2, y);
+        ctx.restore();
+        if (timer > 200 && timer % 60 < 40) { ctx.fillStyle = COL.gold; ctx.font = '10px sans-serif'; ctx.fillText('TAP FOR MENU', W/2, H - 15); }
+    }
+    ctx.restore();
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); } loop();
+</script>
+</body>
+</html>

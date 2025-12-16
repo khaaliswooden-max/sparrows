@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>THE SPARROWS - Season 3: The Mission Begins (Mobile)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            width: 100%; height: 100%; overflow: hidden; 
+            background: #000; 
+            touch-action: none;
+            user-select: none;
+        }
+        #gameCanvas { 
+            display: block;
+            image-rendering: pixelated;
+        }
+        #controls {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 120px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+        }
+        .dpad {
+            width: 100px; height: 100px;
+            position: relative;
+        }
+        .dpad-btn {
+            position: absolute;
+            width: 32px; height: 32px;
+            background: rgba(120,72,200,0.3);
+            border: 2px solid rgba(120,72,200,0.6);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; color: rgba(255,255,255,0.7);
+        }
+        .dpad-btn.active { background: rgba(120,72,200,0.6); }
+        .dpad-up { top: 0; left: 34px; }
+        .dpad-down { bottom: 0; left: 34px; }
+        .dpad-left { top: 34px; left: 0; }
+        .dpad-right { top: 34px; right: 0; }
+        .action-btns {
+            display: flex; gap: 10px; align-items: flex-end;
+        }
+        .action-btn {
+            width: 55px; height: 55px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: bold;
+            color: rgba(255,255,255,0.8);
+            font-family: sans-serif;
+        }
+        .btn-x { background: rgba(200,72,72,0.3); border: 2px solid rgba(200,72,72,0.6); }
+        .btn-y { background: rgba(72,200,72,0.3); border: 2px solid rgba(72,200,72,0.6); margin-bottom: 30px; }
+        .btn-a { background: rgba(72,72,200,0.3); border: 2px solid rgba(72,72,200,0.6); }
+        .action-btn.active { filter: brightness(1.5); }
+        #startOverlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100;
+        }
+        #startBtn {
+            padding: 20px 40px; font-size: 18px;
+            background: rgba(120,72,200,0.8);
+            border: 3px solid #7848c8;
+            color: #fff; border-radius: 10px;
+        }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="controls" class="hide">
+        <div class="dpad">
+            <div class="dpad-btn dpad-up" data-dir="up">▲</div>
+            <div class="dpad-btn dpad-down" data-dir="down">▼</div>
+            <div class="dpad-btn dpad-left" data-dir="left">◀</div>
+            <div class="dpad-btn dpad-right" data-dir="right">▶</div>
+        </div>
+        <div class="action-btns">
+            <div class="action-btn btn-y" id="btnY">SPEC</div>
+            <div class="action-btn btn-x" id="btnX">ATK</div>
+            <div class="action-btn btn-a" id="btnA">JUMP</div>
+        </div>
+    </div>
+    
+    <div id="startOverlay">
+        <button id="startBtn">TAP TO START</button>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const W = 320, H = 224;
+let scale = 1;
+
+function resize() {
+    const ch = 120;
+    const ah = window.innerHeight - ch;
+    scale = Math.min(window.innerWidth / W, ah / H);
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    canvas.style.marginTop = Math.max(0, (ah - H * scale) / 2) + 'px';
+    ctx.imageSmoothingEnabled = false;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const COL = {
+    bg: '#1a1a2e', floor: '#2d2d44', plat: '#3d3d54',
+    text: '#f0f0f0', gold: '#d4a050', purple: '#7848c8',
+    enemy: '#c84848', chars: ['#50b8d8', '#58b868', '#d88848', '#c8a040']
+};
+
+const touch = { up: false, down: false, left: false, right: false, x: false, y: false, a: false };
+const ST = { TITLE: 0, SELECT: 1, PLAY: 2, WIN: 3, LOSE: 4, DONE: 5 };
+let state = ST.TITLE, charIdx = 0, mission = 0, timer = 0, score = 0, combo = 0, comboT = 0;
+
+const CHARS = [
+    { name: 'CIPHER', col: '#50b8d8', spec: 'STUN' },
+    { name: 'VENOM', col: '#58b868', spec: 'FURY' },
+    { name: 'HAWK', col: '#d88848', spec: 'DASH' },
+    { name: 'ORACLE', col: '#c8a040', spec: 'SLOW' }
+];
+
+let player = { x: 30, y: 150, w: 16, h: 28, vx: 0, vy: 0, gr: false, face: 1, atk: false, atkT: 0, spec: false, specT: 0, specCD: 0, hp: 100 };
+let enemies = [], particles = [], camera = { x: 0 }, lvlW = 800;
+
+function initLevel() {
+    player.x = 30; player.y = 150; player.hp = 100;
+    player.vx = 0; player.vy = 0; player.atk = false; player.spec = false; player.specCD = 0;
+    enemies = []; particles = []; camera.x = 0;
+    lvlW = 700 + mission * 150;
+    combo = 0; comboT = 0;
+    
+    for (let i = 0; i < 6 + mission * 2; i++) {
+        enemies.push({
+            x: 150 + i * 90 + Math.random() * 40,
+            y: 166, w: 18, h: 26, vx: 0.8, dir: 1, hp: 2, mhp: 2, hit: 0, stunT: 0
+        });
+    }
+    // Boss
+    if (mission === 3) {
+        enemies.push({ x: lvlW - 100, y: 156, w: 28, h: 36, vx: 0.5, dir: -1, hp: 10, mhp: 10, hit: 0, stunT: 0, boss: true });
+    }
+}
+
+function setupTouch() {
+    document.querySelectorAll('.dpad-btn').forEach(btn => {
+        btn.addEventListener('touchstart', e => { e.preventDefault(); touch[btn.dataset.dir] = true; btn.classList.add('active'); });
+        btn.addEventListener('touchend', e => { e.preventDefault(); touch[btn.dataset.dir] = false; btn.classList.remove('active'); });
+    });
+    ['X', 'Y', 'A'].forEach(b => {
+        const el = document.getElementById('btn' + b);
+        el.addEventListener('touchstart', e => { e.preventDefault(); touch[b.toLowerCase()] = true; el.classList.add('active'); });
+        el.addEventListener('touchend', e => { e.preventDefault(); touch[b.toLowerCase()] = false; el.classList.remove('active'); });
+    });
+    document.getElementById('startBtn').addEventListener('click', () => {
+        document.getElementById('startOverlay').classList.add('hide');
+        document.getElementById('controls').classList.remove('hide');
+        state = ST.SELECT;
+    });
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (state === ST.WIN) { mission++; state = mission >= 4 ? ST.DONE : ST.PLAY; if (state === ST.PLAY) initLevel(); }
+        else if (state === ST.LOSE) { state = ST.PLAY; initLevel(); }
+        else if (state === ST.DONE) { state = ST.TITLE; mission = 0; score = 0; }
+    });
+}
+setupTouch();
+
+const keys = {};
+document.addEventListener('keydown', e => keys[e.code] = true);
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+function input() {
+    return {
+        left: touch.left || keys['ArrowLeft'] || keys['KeyA'],
+        right: touch.right || keys['ArrowRight'] || keys['KeyD'],
+        jump: touch.a || keys['Space'] || keys['KeyW'],
+        atk: touch.x || keys['KeyJ'] || keys['KeyX'],
+        spec: touch.y || keys['KeyK'] || keys['KeyC']
+    };
+}
+
+let pIn = {};
+function update() {
+    timer++;
+    const inp = input();
+    
+    if (state === ST.SELECT) {
+        if (inp.left && !pIn.left) charIdx = (charIdx + 3) % 4;
+        if (inp.right && !pIn.right) charIdx = (charIdx + 1) % 4;
+        if ((inp.jump || inp.atk) && !(pIn.jump || pIn.atk)) { state = ST.PLAY; initLevel(); }
+    }
+    
+    if (state === ST.PLAY) {
+        player.vx = 0;
+        if (inp.left) { player.vx = -2.5; player.face = -1; }
+        if (inp.right) { player.vx = 2.5; player.face = 1; }
+        if (inp.jump && player.gr) { player.vy = -8; player.gr = false; }
+        
+        if (inp.atk && !player.atk) { player.atk = true; player.atkT = 12; }
+        if (player.atk) { player.atkT--; if (player.atkT <= 0) player.atk = false; }
+        
+        if (inp.spec && !pIn.spec && player.specCD <= 0) {
+            player.spec = true; player.specT = 30; player.specCD = 120;
+            for (let i = 0; i < 8; i++) particles.push({ x: player.x + player.w/2, y: player.y + player.h/2, vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, life: 20, col: CHARS[charIdx].col });
+        }
+        if (player.spec) { player.specT--; if (player.specT <= 0) player.spec = false; }
+        if (player.specCD > 0) player.specCD--;
+        
+        player.vy += 0.4;
+        player.x += player.vx;
+        player.y += player.vy;
+        
+        player.gr = false;
+        if (player.y >= 166) { player.y = 166; player.vy = 0; player.gr = true; }
+        player.x = Math.max(0, Math.min(lvlW - player.w, player.x));
+        
+        camera.x = player.x - W / 3;
+        camera.x = Math.max(0, Math.min(lvlW - W, camera.x));
+        
+        if (comboT > 0) { comboT--; if (comboT <= 0) combo = 0; }
+        
+        enemies.forEach(e => {
+            if (e.hp <= 0) return;
+            if (e.stunT > 0) { e.stunT--; return; }
+            if (e.hit > 0) e.hit--;
+            
+            e.x += e.vx * e.dir;
+            if (e.x < 20 || e.x > lvlW - 40) e.dir *= -1;
+            
+            const dx = player.x - e.x, dy = player.y - e.y;
+            if (Math.abs(dx) < 150 && Math.abs(dy) < 50) {
+                e.dir = dx > 0 ? 1 : -1;
+                if (Math.abs(dx) < 30 && Math.abs(dy) < e.h && e.hit <= 0 && !player.spec) {
+                    player.hp -= e.boss ? 15 : 8;
+                    e.hit = 30;
+                    particles.push({ x: player.x, y: player.y, vx: dx > 0 ? -2 : 2, vy: -2, life: 15, col: '#c84848' });
+                    if (player.hp <= 0) state = ST.LOSE;
+                }
+            }
+            
+            // Player attack hit
+            if (player.atk && player.atkT > 6) {
+                const ax = player.face > 0 ? player.x + player.w : player.x - 20;
+                if (ax < e.x + e.w && ax + 20 > e.x && Math.abs(player.y - e.y) < 30) {
+                    e.hp--;
+                    e.hit = 15;
+                    combo++; comboT = 60;
+                    score += 50 * combo;
+                    if (charIdx === 0 && player.spec) e.stunT = 60; // CIPHER stun
+                    if (charIdx === 1 && player.spec) e.hp--; // VENOM extra dmg
+                    for (let i = 0; i < 4; i++) particles.push({ x: e.x + e.w/2, y: e.y + e.h/2, vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 2, life: 15, col: e.hit > 0 ? '#fff' : CHARS[charIdx].col });
+                    if (e.hp <= 0) { score += e.boss ? 1000 : 200; for (let i = 0; i < 10; i++) particles.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, life: 25, col: '#c84848' }); }
+                }
+            }
+        });
+        
+        // HAWK dash
+        if (charIdx === 2 && player.spec && player.specT > 20) player.vx = player.face * 8;
+        // ORACLE slow
+        if (charIdx === 3 && player.spec) enemies.forEach(e => e.stunT = Math.max(e.stunT, 3));
+        
+        particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; return p.life > 0; });
+        
+        if (enemies.every(e => e.hp <= 0)) state = ST.WIN;
+    }
+    
+    pIn = { ...inp };
+}
+
+function draw() {
+    ctx.fillStyle = COL.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(scale, scale);
+    
+    if (state === ST.TITLE) drawTitle();
+    else if (state === ST.SELECT) drawSelect();
+    else if (state === ST.PLAY) drawGame();
+    else if (state === ST.WIN) drawWin();
+    else if (state === ST.LOSE) drawLose();
+    else if (state === ST.DONE) drawDone();
+    
+    ctx.restore();
+}
+
+function drawTitle() {
+    ctx.fillStyle = COL.gold;
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('THE SPARROWS', W/2, 50);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = COL.purple;
+    ctx.fillText('SEASON 3', W/2, 70);
+    ctx.fillStyle = COL.text;
+    ctx.fillText('THE MISSION BEGINS', W/2, 90);
+    
+    for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = CHARS[i].col;
+        ctx.fillRect(95 + i * 35, 110, 16, 28);
+    }
+    
+    ctx.fillStyle = COL.gold;
+    ctx.font = '12px sans-serif';
+    if (timer % 60 < 40) ctx.fillText('TAP TO START', W/2, 180);
+}
+
+function drawSelect() {
+    ctx.fillStyle = COL.text;
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SELECT OPERATIVE', W/2, 35);
+    
+    for (let i = 0; i < 4; i++) {
+        const sel = i === charIdx;
+        if (sel) { ctx.fillStyle = COL.gold; ctx.fillRect(70 + i * 50 - 3, 57, 30, 50); }
+        ctx.fillStyle = CHARS[i].col;
+        ctx.fillRect(70 + i * 50, 60, 24, 44);
+        if (sel) {
+            ctx.fillStyle = COL.text;
+            ctx.font = '12px sans-serif';
+            ctx.fillText(CHARS[i].name, W/2, 130);
+            ctx.font = '10px sans-serif';
+            ctx.fillStyle = COL.gold;
+            ctx.fillText('SPECIAL: ' + CHARS[i].spec, W/2, 145);
+        }
+    }
+    ctx.fillStyle = COL.purple;
+    ctx.font = '10px sans-serif';
+    ctx.fillText('< SELECT >  TAP JUMP TO START', W/2, 190);
+}
+
+function drawGame() {
+    ctx.save();
+    ctx.translate(-camera.x, 0);
+    
+    ctx.fillStyle = COL.floor;
+    ctx.fillRect(0, 192, lvlW, 40);
+    
+    enemies.forEach(e => {
+        if (e.hp <= 0) return;
+        ctx.fillStyle = e.hit > 0 ? '#fff' : (e.stunT > 0 ? '#888' : COL.enemy);
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+        if (e.boss) {
+            ctx.fillStyle = '#333'; ctx.fillRect(e.x, e.y - 8, e.w, 4);
+            ctx.fillStyle = COL.enemy; ctx.fillRect(e.x, e.y - 8, e.w * (e.hp / e.mhp), 4);
+        }
+    });
+    
+    ctx.fillStyle = player.atk && player.atkT > 6 ? '#fff' : CHARS[charIdx].col;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    
+    if (player.atk && player.atkT > 6) {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillRect(player.face > 0 ? player.x + player.w : player.x - 20, player.y + 8, 20, 12);
+    }
+    
+    if (player.spec) {
+        ctx.strokeStyle = CHARS[charIdx].col;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(player.x + player.w/2, player.y + player.h/2, 25 + Math.sin(timer * 0.3) * 5, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    particles.forEach(p => {
+        ctx.fillStyle = p.col;
+        ctx.globalAlpha = p.life / 25;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    });
+    ctx.globalAlpha = 1;
+    
+    ctx.restore();
+    
+    // UI
+    ctx.fillStyle = '#000a';
+    ctx.fillRect(0, 0, W, 22);
+    ctx.fillStyle = COL.text;
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('M' + (mission + 1) + ' ' + CHARS[charIdx].name, 5, 14);
+    
+    ctx.fillStyle = '#333'; ctx.fillRect(80, 6, 60, 8);
+    ctx.fillStyle = player.hp > 30 ? '#48c848' : '#c84848';
+    ctx.fillRect(80, 6, 60 * (player.hp / 100), 8);
+    
+    ctx.fillStyle = '#333'; ctx.fillRect(150, 6, 40, 8);
+    ctx.fillStyle = player.specCD <= 0 ? COL.gold : '#666';
+    ctx.fillRect(150, 6, 40 * (1 - player.specCD / 120), 8);
+    
+    ctx.textAlign = 'right';
+    ctx.fillStyle = COL.gold;
+    ctx.fillText('SCORE: ' + score, W - 5, 14);
+    
+    if (combo > 1) {
+        ctx.fillStyle = COL.gold;
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(combo + ' COMBO!', W/2, 40);
+    }
+}
+
+function drawWin() {
+    ctx.fillStyle = '#48c848';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('STAGE CLEAR!', W/2, 80);
+    ctx.fillStyle = COL.text;
+    ctx.font = '12px sans-serif';
+    ctx.fillText('SCORE: ' + score, W/2, 110);
+    if (timer % 60 < 40) ctx.fillText('TAP TO CONTINUE', W/2, 150);
+}
+
+function drawLose() {
+    ctx.fillStyle = COL.enemy;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('MISSION FAILED', W/2, 90);
+    ctx.fillStyle = COL.text;
+    ctx.font = '12px sans-serif';
+    if (timer % 60 < 40) ctx.fillText('TAP TO RETRY', W/2, 130);
+}
+
+function drawDone() {
+    ctx.fillStyle = COL.gold;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SEASON 3 COMPLETE', W/2, 50);
+    ctx.fillStyle = COL.text;
+    ctx.font = '10px sans-serif';
+    ctx.fillText('THE SPARROWS HAVE PROVEN', W/2, 80);
+    ctx.fillText('THEMSELVES IN COMBAT', W/2, 95);
+    ctx.fillText('BUT DANGER LURKS WITHIN...', W/2, 115);
+    ctx.fillText('SCORE: ' + score, W/2, 140);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(95 + i * 35, 155, 16, 28); }
+    if (timer % 60 < 40) ctx.fillText('TAP FOR MENU', W/2, 210);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

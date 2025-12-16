@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>THE SPARROWS - Season 7: Reckoning (Mobile)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; }
+        #gameCanvas { display: block; }
+        #controls { position: fixed; bottom: 0; left: 0; right: 0; height: 115px; display: flex; justify-content: space-between; align-items: center; padding: 8px 15px; }
+        #joystick { width: 88px; height: 88px; background: rgba(48,96,160,0.25); border: 2px solid rgba(48,96,160,0.5); border-radius: 50%; position: relative; }
+        #joystickKnob { width: 35px; height: 35px; background: rgba(48,96,160,0.7); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        .action-btns { display: flex; gap: 8px; align-items: flex-end; }
+        .action-btn { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: bold; color: rgba(255,255,255,0.9); font-family: sans-serif; }
+        .btn-shoot { background: rgba(200,72,72,0.4); border: 3px solid rgba(200,72,72,0.7); width: 58px; height: 58px; font-size: 10px; }
+        .btn-ability { background: rgba(72,200,200,0.3); border: 2px solid rgba(72,200,200,0.6); width: 46px; height: 46px; }
+        .btn-ult { background: rgba(212,160,80,0.3); border: 2px solid rgba(212,160,80,0.6); width: 46px; height: 46px; }
+        .action-btn.active { filter: brightness(1.4); }
+        #startOverlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        #startBtn { padding: 20px 40px; font-size: 18px; background: rgba(48,96,160,0.8); border: 3px solid #3060a0; color: #fff; border-radius: 10px; }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="controls" class="hide">
+        <div id="joystick"><div id="joystickKnob"></div></div>
+        <div class="action-btns">
+            <div class="action-btn btn-ability" id="btnAbility">SKILL</div>
+            <div class="action-btn btn-ult" id="btnUlt">ULT</div>
+            <div class="action-btn btn-shoot" id="btnShoot">FIRE</div>
+        </div>
+    </div>
+    <div id="startOverlay"><button id="startBtn">TAP TO START</button></div>
+<script>
+const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+const W = 480, H = 270; let scale = 1;
+function resize() { const ch = 115, ah = window.innerHeight - ch; scale = Math.min(window.innerWidth / W, ah / H); canvas.width = W * scale; canvas.height = H * scale; canvas.style.marginTop = Math.max(0, (ah - H * scale) / 2) + 'px'; }
+resize(); window.addEventListener('resize', resize);
+const COL = { bg: '#080810', floor: '#101018', enemy: '#c84848', text: '#e0e0e0', gold: '#d4a050', blue: '#3060a0' };
+const joy = { x: 0, y: 0 }, touch = { shoot: false, ability: false, ult: false };
+const ST = { TITLE: 0, SELECT: 1, PLAY: 2, WIN: 3, LOSE: 4, DONE: 5 };
+let state = ST.TITLE, charIdx = 0, mission = 0, timer = 0;
+const CHARS = [ { name: 'CIPHER', col: '#50b8d8', ability: 'EMP' }, { name: 'VENOM', col: '#58b868', ability: 'TOXIN' }, { name: 'HAWK', col: '#d88848', ability: 'MARK' }, { name: 'ORACLE', col: '#c8a040', ability: 'SLOW' } ];
+let player = { x: 50, y: 140, w: 16, h: 26, hp: 100, ammo: 50, face: 1, shootCD: 0, abilityCD: 0, ultCharge: 0 };
+let enemies = [], bullets = [], particles = [], camera = { x: 0 }, lvlW = 1000;
+
+function initLevel() {
+    player.x = 50; player.y = 140; player.hp = 100; player.ammo = 50; player.shootCD = 0; player.abilityCD = 0; player.ultCharge = 0;
+    enemies = []; bullets = []; particles = []; camera.x = 0; lvlW = 900 + mission * 250;
+    for (let i = 0; i < 10 + mission * 3; i++) {
+        const isBoss = mission === 3 && i === 0;
+        enemies.push({ x: 250 + i * 65, y: 50 + Math.random() * 170, w: isBoss ? 24 : 14, h: isBoss ? 32 : 24, hp: isBoss ? 25 : 3, mhp: isBoss ? 25 : 3, dir: 1, shootCD: 50 + Math.random() * 50, boss: isBoss, stunned: 0 });
+    }
+}
+
+const joystickEl = document.getElementById('joystick'), knob = document.getElementById('joystickKnob');
+joystickEl.addEventListener('touchstart', e => { e.preventDefault(); updateJoy(e); });
+joystickEl.addEventListener('touchmove', e => { e.preventDefault(); updateJoy(e); });
+joystickEl.addEventListener('touchend', e => { e.preventDefault(); joy.x = 0; joy.y = 0; knob.style.left = '50%'; knob.style.top = '50%'; });
+function updateJoy(e) { const rect = joystickEl.getBoundingClientRect(), cx = rect.left + rect.width/2, cy = rect.top + rect.height/2; let dx = e.touches[0].clientX - cx, dy = e.touches[0].clientY - cy; const dist = Math.sqrt(dx*dx + dy*dy), maxD = rect.width/2 - 17; if (dist > maxD) { dx = dx/dist*maxD; dy = dy/dist*maxD; } knob.style.left = (50 + dx/maxD*26) + '%'; knob.style.top = (50 + dy/maxD*26) + '%'; joy.x = dx/maxD; joy.y = dy/maxD; }
+
+['Shoot', 'Ability', 'Ult'].forEach(b => { const el = document.getElementById('btn' + b); el.addEventListener('touchstart', e => { e.preventDefault(); touch[b.toLowerCase()] = true; el.classList.add('active'); }); el.addEventListener('touchend', e => { e.preventDefault(); touch[b.toLowerCase()] = false; el.classList.remove('active'); }); });
+document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('startOverlay').classList.add('hide'); document.getElementById('controls').classList.remove('hide'); state = ST.SELECT; });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); if (state === ST.WIN) { mission++; state = mission >= 4 ? ST.DONE : ST.PLAY; if (state === ST.PLAY) initLevel(); } else if (state === ST.LOSE) { state = ST.PLAY; initLevel(); } else if (state === ST.DONE) { state = ST.TITLE; mission = 0; } });
+
+let pAbility = false, pUlt = false;
+function update() {
+    timer++;
+    if (state === ST.SELECT) { if (joy.x < -0.5 && timer % 10 === 0) charIdx = (charIdx + 3) % 4; if (joy.x > 0.5 && timer % 10 === 0) charIdx = (charIdx + 1) % 4; if (touch.shoot) { state = ST.PLAY; initLevel(); } }
+    if (state === ST.PLAY) {
+        player.x += joy.x * 2.8; player.y += joy.y * 2.8;
+        if (joy.x !== 0) player.face = joy.x > 0 ? 1 : -1;
+        player.x = Math.max(10, Math.min(lvlW - player.w - 10, player.x));
+        player.y = Math.max(30, Math.min(H - player.h - 10, player.y));
+        camera.x = Math.max(0, Math.min(lvlW - W, player.x - W/3));
+        
+        let target = null, tDist = 280;
+        enemies.forEach(e => { if (e.hp <= 0) return; const d = Math.sqrt((e.x-player.x)**2 + (e.y-player.y)**2); if (d < tDist) { tDist = d; target = e; } });
+        
+        if (player.shootCD > 0) player.shootCD--;
+        if (player.abilityCD > 0) player.abilityCD--;
+        
+        if (touch.shoot && player.shootCD <= 0 && player.ammo > 0) {
+            player.shootCD = 5; player.ammo--;
+            let tx = target ? target.x + target.w/2 : player.x + player.face * 300;
+            let ty = target ? target.y + target.h/2 : player.y + player.h/2;
+            const dx = tx - player.x, dy = ty - (player.y + player.h/2), dist = Math.sqrt(dx*dx + dy*dy);
+            bullets.push({ x: player.x + player.w/2, y: player.y + player.h/2, vx: dx/dist * 12, vy: dy/dist * 12, owner: 'player' });
+            player.ultCharge = Math.min(100, player.ultCharge + 2);
+        }
+        
+        if (touch.ability && !pAbility && player.abilityCD <= 0) {
+            player.abilityCD = 180;
+            if (charIdx === 0) enemies.forEach(e => { if (e.hp > 0 && Math.abs(e.x - player.x) < 150) e.stunned = 90; });
+            else if (charIdx === 1) { for (let i = 0; i < 8; i++) particles.push({ x: player.x + player.face * 60, y: player.y - 20 + i * 10, vx: player.face * 0.5, vy: 0, life: 90, col: '#0f0', dmg: true }); }
+            else if (charIdx === 2) enemies.forEach(e => { if (e.hp > 0) e.marked = 120; });
+            else enemies.forEach(e => { if (e.hp > 0) e.slowed = 120; });
+        }
+        
+        if (touch.ult && !pUlt && player.ultCharge >= 100) {
+            player.ultCharge = 0;
+            if (charIdx === 0) enemies.forEach(e => { if (e.hp > 0) { e.hp -= 3; e.stunned = 150; } });
+            else if (charIdx === 1) enemies.forEach(e => { if (e.hp > 0) e.hp -= 5; });
+            else if (charIdx === 2) enemies.forEach(e => { if (e.hp > 0) e.hp -= 4; });
+            else enemies.forEach(e => { if (e.hp > 0) e.stunned = 240; });
+            for (let i = 0; i < 20; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, life: 30, col: CHARS[charIdx].col });
+        }
+        
+        enemies.forEach(e => {
+            if (e.hp <= 0) return;
+            if (e.stunned > 0) { e.stunned--; return; }
+            const spd = e.slowed > 0 ? 0.2 : 0.5; if (e.slowed > 0) e.slowed--;
+            e.x += spd * e.dir; if (e.x < 100 || e.x > lvlW - 50) e.dir *= -1;
+            if (Math.abs(player.x - e.x) < 200) { e.shootCD--; if (e.shootCD <= 0) { e.shootCD = 60 + Math.random() * 40; const dx = player.x - e.x, dy = player.y - e.y, dist = Math.sqrt(dx*dx+dy*dy); bullets.push({ x: e.x + e.w/2, y: e.y + e.h/2, vx: dx/dist * 5, vy: dy/dist * 5, owner: 'enemy' }); } }
+        });
+        
+        bullets = bullets.filter(b => {
+            b.x += b.vx; b.y += b.vy;
+            if (b.x < camera.x - 50 || b.x > camera.x + W + 50) return false;
+            if (b.owner === 'player') { enemies.forEach(e => { if (e.hp > 0 && b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) { const dmg = e.marked > 0 ? 2 : 1; e.hp -= dmg; b.vx = 0; for (let i = 0; i < 4; i++) particles.push({ x: b.x, y: b.y, vx: (Math.random()-0.5)*3, vy: (Math.random()-0.5)*3, life: 12, col: '#f44' }); } }); }
+            else { if (b.x > player.x && b.x < player.x + player.w && b.y > player.y && b.y < player.y + player.h) { player.hp -= 8; b.vx = 0; if (player.hp <= 0) state = ST.LOSE; } }
+            return b.vx !== 0;
+        });
+        
+        particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life--; if (p.dmg) enemies.forEach(e => { if (e.hp > 0 && Math.abs(e.x - p.x) < 30 && Math.abs(e.y - p.y) < 30 && p.life % 15 === 0) e.hp--; }); return p.life > 0; });
+        if (enemies.every(e => e.hp <= 0)) state = ST.WIN;
+    }
+    pAbility = touch.ability; pUlt = touch.ult;
+}
+
+function draw() {
+    ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save(); ctx.scale(scale, scale);
+    if (state === ST.TITLE) { ctx.fillStyle = COL.gold; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('THE SPARROWS', W/2, 55); ctx.font = '14px sans-serif'; ctx.fillStyle = COL.blue; ctx.fillText('SEASON 7', W/2, 75); ctx.fillStyle = COL.text; ctx.fillText('RECKONING', W/2, 95); for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(155 + i * 45, 115, 16, 26); } ctx.fillStyle = COL.gold; if (timer % 60 < 40) ctx.fillText('TAP TO START', W/2, 190); }
+    else if (state === ST.SELECT) { ctx.fillStyle = COL.text; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('SELECT OPERATIVE', W/2, 40); for (let i = 0; i < 4; i++) { const sel = i === charIdx; if (sel) { ctx.fillStyle = COL.gold; ctx.fillRect(140 + i * 55 - 3, 57, 30, 48); } ctx.fillStyle = CHARS[i].col; ctx.fillRect(140 + i * 55, 60, 24, 42); if (sel) { ctx.fillStyle = COL.text; ctx.fillText(CHARS[i].name, W/2, 125); ctx.font = '10px sans-serif'; ctx.fillText('SKILL: ' + CHARS[i].ability, W/2, 145); } } ctx.fillStyle = COL.blue; ctx.font = '10px sans-serif'; ctx.fillText('TAP FIRE TO START', W/2, 190); }
+    else if (state === ST.PLAY) {
+        ctx.save(); ctx.translate(-camera.x, 0);
+        ctx.fillStyle = COL.floor; ctx.fillRect(0, 0, lvlW, H);
+        enemies.forEach(e => { if (e.hp <= 0) return; ctx.fillStyle = e.stunned > 0 ? '#666' : (e.marked > 0 ? '#ff0' : COL.enemy); ctx.fillRect(e.x, e.y, e.w, e.h); if (e.boss || e.hp < e.mhp) { ctx.fillStyle = '#300'; ctx.fillRect(e.x, e.y - 6, e.w, 3); ctx.fillStyle = '#f00'; ctx.fillRect(e.x, e.y - 6, e.w * (e.hp / e.mhp), 3); } });
+        ctx.fillStyle = CHARS[charIdx].col; ctx.fillRect(player.x, player.y, player.w, player.h);
+        bullets.forEach(b => { ctx.fillStyle = b.owner === 'player' ? '#ff0' : '#f44'; ctx.fillRect(b.x - 2, b.y - 1, 5, 2); });
+        particles.forEach(p => { ctx.fillStyle = p.col; ctx.globalAlpha = p.life / 30; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }); ctx.globalAlpha = 1;
+        ctx.restore();
+        ctx.fillStyle = '#000c'; ctx.fillRect(0, 0, W, 24);
+        ctx.fillStyle = COL.text; ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(CHARS[charIdx].name, 8, 14);
+        ctx.fillStyle = '#300'; ctx.fillRect(70, 6, 70, 8); ctx.fillStyle = player.hp > 30 ? '#0a0' : '#a00'; ctx.fillRect(70, 6, 70 * (player.hp / 100), 8);
+        ctx.fillStyle = '#330'; ctx.fillRect(150, 6, 50, 8); ctx.fillStyle = player.abilityCD <= 0 ? '#0aa' : '#066'; ctx.fillRect(150, 6, 50 * (1 - player.abilityCD / 180), 8);
+        ctx.fillStyle = '#330'; ctx.fillRect(210, 6, 50, 8); ctx.fillStyle = COL.gold; ctx.fillRect(210, 6, 50 * (player.ultCharge / 100), 8);
+        ctx.textAlign = 'right'; ctx.fillText('AMMO: ' + player.ammo, W - 8, 14);
+        const rem = enemies.filter(e => e.hp > 0).length; ctx.textAlign = 'center'; ctx.fillText('HOSTILES: ' + rem, W/2, H - 8);
+    }
+    else if (state === ST.WIN) { ctx.fillStyle = '#48c848'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('OBJECTIVE COMPLETE', W/2, 100); ctx.fillStyle = COL.text; ctx.font = '11px sans-serif'; if (timer % 60 < 40) ctx.fillText('TAP TO CONTINUE', W/2, 150); }
+    else if (state === ST.LOSE) { ctx.fillStyle = COL.enemy; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('MISSION FAILED', W/2, 100); ctx.fillStyle = COL.text; ctx.font = '11px sans-serif'; if (timer % 60 < 40) ctx.fillText('TAP TO RETRY', W/2, 150); }
+    else if (state === ST.DONE) { ctx.fillStyle = COL.gold; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('SEASON 7 COMPLETE', W/2, 55); ctx.fillStyle = COL.text; ctx.font = '10px sans-serif'; ctx.fillText('THE RECKONING HAS COME', W/2, 85); ctx.fillText('ONE FINAL BATTLE REMAINS', W/2, 105); for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(155 + i * 45, 130, 16, 26); } if (timer % 60 < 40) ctx.fillText('TAP FOR MENU', W/2, 200); }
+    ctx.restore();
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); } loop();
+</script>
+</body>
+</html>

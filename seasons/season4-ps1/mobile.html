@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>THE SPARROWS - Season 4: Bonds Tested (Mobile)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; }
+        #gameCanvas { display: block; image-rendering: pixelated; }
+        #controls {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 130px;
+            display: flex; justify-content: space-between; align-items: center; padding: 10px 20px;
+        }
+        #joystick {
+            width: 100px; height: 100px;
+            background: rgba(72,136,200,0.2);
+            border: 2px solid rgba(72,136,200,0.4);
+            border-radius: 50%;
+            position: relative;
+        }
+        #joystickKnob {
+            width: 40px; height: 40px;
+            background: rgba(72,136,200,0.6);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .action-btns { display: flex; gap: 10px; align-items: flex-end; }
+        .action-btn {
+            width: 55px; height: 55px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px; font-weight: bold; color: rgba(255,255,255,0.8);
+            font-family: sans-serif;
+        }
+        .btn-act { background: rgba(72,200,72,0.3); border: 2px solid rgba(72,200,72,0.6); }
+        .btn-codec { background: rgba(200,200,72,0.3); border: 2px solid rgba(200,200,72,0.6); width: 50px; height: 50px; }
+        .action-btn.active { filter: brightness(1.5); transform: scale(0.95); }
+        #startOverlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100;
+        }
+        #startBtn { padding: 20px 40px; font-size: 18px; background: rgba(72,136,200,0.8); border: 3px solid #4888c8; color: #fff; border-radius: 10px; }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="controls" class="hide">
+        <div id="joystick"><div id="joystickKnob"></div></div>
+        <div class="action-btns">
+            <div class="action-btn btn-codec" id="btnCodec">CODEC</div>
+            <div class="action-btn btn-act" id="btnAct">ACT</div>
+        </div>
+    </div>
+    
+    <div id="startOverlay">
+        <button id="startBtn">TAP TO START</button>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const W = 320, H = 240;
+let scale = 1;
+
+function resize() {
+    const ch = 130;
+    const ah = window.innerHeight - ch;
+    scale = Math.min(window.innerWidth / W, ah / H);
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    canvas.style.marginTop = Math.max(0, (ah - H * scale) / 2) + 'px';
+    ctx.imageSmoothingEnabled = false;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const COL = { bg: '#1a2a3a', floor: '#2a3a4a', wall: '#3a4a5a', enemy: '#c84848', alert: '#ffcc00', text: '#f0f0f0', gold: '#d4a050', blue: '#4888c8' };
+
+const joy = { x: 0, y: 0, active: false };
+const touch = { act: false, codec: false };
+const ST = { TITLE: 0, SELECT: 1, PLAY: 2, WIN: 3, LOSE: 4, DONE: 5 };
+let state = ST.TITLE, charIdx = 0, mission = 0, timer = 0, codecShow = false, codecIdx = 0;
+
+const CHARS = [
+    { name: 'CIPHER', col: '#50b8d8' },
+    { name: 'VENOM', col: '#58b868' },
+    { name: 'HAWK', col: '#d88848' },
+    { name: 'ORACLE', col: '#c8a040' }
+];
+
+const CODECS = [
+    ['HANDLER: First stealth mission.', 'Reach the extraction point.', 'Avoid detection at all costs.'],
+    ['HANDLER: Intel suggests a mole.', 'CIPHER: Someone is leaking info.', 'Trust no one outside the team.'],
+    ['VENOM: Security is tighter here.', 'ORACLE: Something feels wrong.', 'HANDLER: Stay focused.'],
+    ['This is it. Find the mole.', 'CIPHER: The truth will come out.', 'VENOM: Whatever it takes.']
+];
+
+let player = { x: 30, y: 180, w: 14, h: 20, detected: false, detectT: 0 };
+let enemies = [], walls = [], goal = { x: 280, y: 30, w: 24, h: 24 };
+
+function initLevel() {
+    player.x = 30; player.y = 200; player.detected = false; player.detectT = 0;
+    enemies = []; walls = []; codecIdx = 0;
+    
+    for (let i = 0; i < 4 + mission; i++) {
+        walls.push({ x: 60 + i * 55, y: 50 + (i % 3) * 60, w: 35, h: 12 });
+    }
+    
+    for (let i = 0; i < 2 + mission; i++) {
+        enemies.push({
+            x: 100 + i * 70, y: 70 + (i % 2) * 90,
+            w: 12, h: 16, dir: 1, patrolW: 50,
+            startX: 100 + i * 70, alert: 0
+        });
+    }
+    
+    goal.x = 270; goal.y = 40 + mission * 15;
+}
+
+// Joystick
+const joystickEl = document.getElementById('joystick');
+const knob = document.getElementById('joystickKnob');
+let joyRect = null;
+
+function updateJoy(tx, ty) {
+    if (!joyRect) joyRect = joystickEl.getBoundingClientRect();
+    const cx = joyRect.left + joyRect.width / 2;
+    const cy = joyRect.top + joyRect.height / 2;
+    let dx = tx - cx, dy = ty - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxD = joyRect.width / 2 - 20;
+    if (dist > maxD) { dx = dx / dist * maxD; dy = dy / dist * maxD; }
+    knob.style.left = (50 + dx / maxD * 30) + '%';
+    knob.style.top = (50 + dy / maxD * 30) + '%';
+    joy.x = dx / maxD; joy.y = dy / maxD;
+}
+
+joystickEl.addEventListener('touchstart', e => { e.preventDefault(); joy.active = true; joyRect = joystickEl.getBoundingClientRect(); updateJoy(e.touches[0].clientX, e.touches[0].clientY); });
+joystickEl.addEventListener('touchmove', e => { e.preventDefault(); if (joy.active) updateJoy(e.touches[0].clientX, e.touches[0].clientY); });
+joystickEl.addEventListener('touchend', e => { e.preventDefault(); joy.active = false; joy.x = 0; joy.y = 0; knob.style.left = '50%'; knob.style.top = '50%'; });
+
+document.getElementById('btnAct').addEventListener('touchstart', e => { e.preventDefault(); touch.act = true; e.target.classList.add('active'); });
+document.getElementById('btnAct').addEventListener('touchend', e => { e.preventDefault(); touch.act = false; e.target.classList.remove('active'); });
+document.getElementById('btnCodec').addEventListener('touchstart', e => { e.preventDefault(); touch.codec = true; e.target.classList.add('active'); if (state === ST.PLAY) codecShow = !codecShow; });
+document.getElementById('btnCodec').addEventListener('touchend', e => { e.preventDefault(); touch.codec = false; e.target.classList.remove('active'); });
+
+document.getElementById('startBtn').addEventListener('click', () => {
+    document.getElementById('startOverlay').classList.add('hide');
+    document.getElementById('controls').classList.remove('hide');
+    state = ST.SELECT;
+});
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state === ST.WIN) { mission++; state = mission >= 4 ? ST.DONE : ST.PLAY; if (state === ST.PLAY) initLevel(); }
+    else if (state === ST.LOSE) { state = ST.PLAY; initLevel(); }
+    else if (state === ST.DONE) { state = ST.TITLE; mission = 0; }
+});
+
+const keys = {};
+document.addEventListener('keydown', e => keys[e.code] = true);
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+let pAct = false;
+function update() {
+    timer++;
+    
+    if (state === ST.SELECT) {
+        if (joy.x < -0.5 && timer % 12 === 0) charIdx = (charIdx + 3) % 4;
+        if (joy.x > 0.5 && timer % 12 === 0) charIdx = (charIdx + 1) % 4;
+        if (touch.act && !pAct) { state = ST.PLAY; initLevel(); }
+    }
+    
+    if (state === ST.PLAY && !codecShow) {
+        const spd = 1.8;
+        player.x += joy.x * spd;
+        player.y += joy.y * spd;
+        
+        if (keys['ArrowLeft']) player.x -= spd;
+        if (keys['ArrowRight']) player.x += spd;
+        if (keys['ArrowUp']) player.y -= spd;
+        if (keys['ArrowDown']) player.y += spd;
+        
+        player.x = Math.max(5, Math.min(W - player.w - 5, player.x));
+        player.y = Math.max(25, Math.min(H - player.h - 5, player.y));
+        
+        walls.forEach(w => {
+            if (player.x < w.x + w.w && player.x + player.w > w.x && player.y < w.y + w.h && player.y + player.h > w.y) {
+                const ox = (player.x + player.w/2) - (w.x + w.w/2);
+                const oy = (player.y + player.h/2) - (w.y + w.h/2);
+                if (Math.abs(ox) / w.w > Math.abs(oy) / w.h) {
+                    player.x = ox > 0 ? w.x + w.w : w.x - player.w;
+                } else {
+                    player.y = oy > 0 ? w.y + w.h : w.y - player.h;
+                }
+            }
+        });
+        
+        enemies.forEach(e => {
+            e.x += e.dir * 0.6;
+            if (e.x < e.startX - e.patrolW || e.x > e.startX + e.patrolW) e.dir *= -1;
+            
+            const dx = player.x - e.x, dy = player.y - e.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const inFront = (e.dir > 0 && dx > 0) || (e.dir < 0 && dx < 0);
+            
+            if (dist < 55 && inFront && Math.abs(dy) < 35) {
+                e.alert = Math.min(100, e.alert + 2.5);
+                if (e.alert >= 100) { player.detected = true; player.detectT = 90; }
+            } else {
+                e.alert = Math.max(0, e.alert - 0.8);
+            }
+        });
+        
+        if (player.detected) {
+            player.detectT--;
+            if (player.detectT <= 0) state = ST.LOSE;
+        }
+        
+        if (player.x + player.w > goal.x && player.x < goal.x + goal.w &&
+            player.y + player.h > goal.y && player.y < goal.y + goal.h) {
+            state = ST.WIN;
+        }
+    }
+    
+    pAct = touch.act;
+}
+
+function draw() {
+    ctx.fillStyle = COL.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(scale, scale);
+    
+    if (state === ST.TITLE) drawTitle();
+    else if (state === ST.SELECT) drawSelect();
+    else if (state === ST.PLAY) drawGame();
+    else if (state === ST.WIN) drawWin();
+    else if (state === ST.LOSE) drawLose();
+    else if (state === ST.DONE) drawDone();
+    
+    ctx.restore();
+}
+
+function drawTitle() {
+    ctx.fillStyle = COL.gold;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('THE SPARROWS', W/2, 55);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = COL.blue;
+    ctx.fillText('SEASON 4', W/2, 75);
+    ctx.fillStyle = COL.text;
+    ctx.fillText('BONDS TESTED', W/2, 95);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(95 + i * 35, 115, 14, 20); }
+    ctx.fillStyle = COL.gold;
+    if (timer % 60 < 40) ctx.fillText('TAP TO START', W/2, 180);
+}
+
+function drawSelect() {
+    ctx.fillStyle = COL.text;
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SELECT OPERATIVE', W/2, 40);
+    for (let i = 0; i < 4; i++) {
+        const sel = i === charIdx;
+        if (sel) { ctx.fillStyle = COL.gold; ctx.fillRect(72 + i * 48 - 3, 57, 26, 38); }
+        ctx.fillStyle = CHARS[i].col;
+        ctx.fillRect(72 + i * 48, 60, 20, 32);
+        if (sel) { ctx.fillStyle = COL.text; ctx.fillText(CHARS[i].name, W/2, 115); }
+    }
+    ctx.fillStyle = COL.blue;
+    ctx.font = '9px sans-serif';
+    ctx.fillText('JOYSTICK SELECT | TAP ACT', W/2, 160);
+}
+
+function drawGame() {
+    ctx.fillStyle = COL.floor;
+    ctx.fillRect(0, 20, W, H - 20);
+    
+    ctx.fillStyle = COL.wall;
+    walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+    
+    ctx.fillStyle = '#48c848';
+    ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+    ctx.fillStyle = '#fff';
+    ctx.font = '7px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('EXIT', goal.x + goal.w/2, goal.y + goal.h/2 + 2);
+    
+    enemies.forEach(e => {
+        ctx.fillStyle = `rgba(255,200,0,${e.alert / 300})`;
+        ctx.beginPath();
+        ctx.moveTo(e.x + e.w/2, e.y + e.h/2);
+        const ang = e.dir > 0 ? 0 : Math.PI;
+        ctx.arc(e.x + e.w/2, e.y + e.h/2, 55, ang - 0.5, ang + 0.5);
+        ctx.fill();
+        
+        ctx.fillStyle = e.alert > 50 ? COL.alert : COL.enemy;
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+        
+        if (e.alert > 10) {
+            ctx.fillStyle = e.alert > 50 ? '#f00' : '#ff0';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillText(e.alert > 50 ? '!' : '?', e.x + e.w/2, e.y - 5);
+        }
+    });
+    
+    ctx.fillStyle = CHARS[charIdx].col;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    
+    // UI
+    ctx.fillStyle = '#000c';
+    ctx.fillRect(0, 0, W, 20);
+    ctx.fillStyle = COL.text;
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('M' + (mission + 1) + ' ' + CHARS[charIdx].name, 5, 14);
+    ctx.textAlign = 'right';
+    ctx.fillText('CODEC: INTEL', W - 5, 14);
+    
+    if (player.detected) {
+        ctx.fillStyle = 'rgba(200,50,50,0.3)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#c84848';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('DETECTED!', W/2, H/2);
+        ctx.font = '12px sans-serif';
+        ctx.fillText(Math.ceil(player.detectT / 30), W/2, H/2 + 20);
+    }
+    
+    if (codecShow) {
+        ctx.fillStyle = 'rgba(0,30,0,0.92)';
+        ctx.fillRect(10, 30, W - 20, 100);
+        ctx.strokeStyle = '#0f0';
+        ctx.strokeRect(10, 30, W - 20, 100);
+        ctx.fillStyle = '#0f0';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'left';
+        CODECS[mission].forEach((l, i) => {
+            ctx.fillStyle = i <= codecIdx ? '#0f0' : '#060';
+            ctx.fillText(l, 20, 50 + i * 18);
+        });
+        ctx.fillStyle = '#0f0';
+        ctx.textAlign = 'center';
+        ctx.fillText('TAP CODEC TO CLOSE', W/2, 120);
+        if (codecIdx < CODECS[mission].length - 1) codecIdx++;
+    }
+}
+
+function drawWin() {
+    ctx.fillStyle = '#48c848';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('EXTRACTION', W/2, 85);
+    ctx.fillText('SUCCESSFUL', W/2, 105);
+    ctx.fillStyle = COL.text;
+    ctx.font = '10px sans-serif';
+    if (timer % 60 < 40) ctx.fillText('TAP TO CONTINUE', W/2, 150);
+}
+
+function drawLose() {
+    ctx.fillStyle = COL.enemy;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('MISSION FAILED', W/2, 95);
+    ctx.fillStyle = COL.text;
+    ctx.font = '10px sans-serif';
+    if (timer % 60 < 40) ctx.fillText('TAP TO RETRY', W/2, 135);
+}
+
+function drawDone() {
+    ctx.fillStyle = COL.gold;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SEASON 4 COMPLETE', W/2, 55);
+    ctx.fillStyle = COL.text;
+    ctx.font = '9px sans-serif';
+    ctx.fillText('THE MOLE WAS WITHIN', W/2, 85);
+    ctx.fillText('HANDLER WAS THE TRAITOR', W/2, 100);
+    ctx.fillText('THE SPARROWS SURVIVED', W/2, 120);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = CHARS[i].col; ctx.fillRect(95 + i * 35, 140, 14, 20); }
+    if (timer % 60 < 40) ctx.fillText('TAP FOR MENU', W/2, 195);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

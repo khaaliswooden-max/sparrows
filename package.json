@@ -1,0 +1,20 @@
+{
+  "name": "sparrows-phaser",
+  "version": "0.1.0",
+  "description": "THE SPARROWS: Phaser 4 toolchain for future season development",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "dev:template": "vite seasons/season-phaser-template",
+    "build": "vite build",
+    "build:template": "vite build seasons/season-phaser-template",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^4.0.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

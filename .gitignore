@@ -15,6 +15,10 @@ node_modules/
 dist/
 build/
 
+# Local-only asset source repos (LPC generator is 869MB / 153k files,
+# only the extracted PNGs in shared/assets/characters/ are committed)
+vendor/
+
 # Logs
 *.log
 npm-debug.log*

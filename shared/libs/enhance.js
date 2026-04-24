@@ -6,9 +6,12 @@
 import nipplejs from 'nipplejs';
 import hotkeys from 'hotkeys-js';
 import localforage from 'localforage';
+import * as characters from './characterRenderer.js';
 
 const ns = (window.Sparrows ||= {});
 ns.version = '0.1.0';
+ns.characters = characters;
+characters.preloadCharacters();
 
 // ---------------------------------------------------------------------------
 // Persistence (localforage) — prefers IndexedDB, falls back to localStorage

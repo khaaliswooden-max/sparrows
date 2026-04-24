@@ -5,6 +5,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { sfxr } from 'jsfxr';
 import localforage from 'localforage';
+import * as characters from './characterRenderer.js';
 
 localforage.config({ name: 'sparrows', storeName: 'saves' });
 
@@ -222,3 +223,17 @@ if (!reduced && !matchMedia('(hover: none)').matches) {
     card.addEventListener('pointerleave', () => { qx(0); qy(0); });
   });
 }
+
+// ---------------------------------------------------------------------------
+// LPC character portraits — replaces the placeholder block+circle on each card
+// ---------------------------------------------------------------------------
+characters.preloadCharacters().then(() => {
+  qa('.character-icon[data-key]').forEach((icon) => {
+    const key = icon.getAttribute('data-key');
+    const url = characters.renderPortrait(key, { size: 96 });
+    if (!url) return;
+    const img = icon.querySelector('img.character-portrait');
+    if (img) img.src = url;
+    icon.classList.add('has-portrait');
+  });
+});

@@ -9,33 +9,83 @@
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;600;700&display=swap');
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+
         body {
-            background: linear-gradient(135deg, #030305 0%, #0a0a12 50%, #080810 100%);
+            background: #030305;
             min-height: 100vh;
             font-family: 'Inter', sans-serif;
             color: #e8e8f0;
             overflow-x: hidden;
         }
-        
-        /* Starfield */
-        .stars {
+
+        /* Animated nebula background */
+        #bg-canvas {
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
+            inset: 0;
             z-index: 0;
+            pointer-events: none;
         }
-        
-        .star {
-            position: absolute;
-            background: #fff;
-            border-radius: 50%;
-            animation: twinkle 3s infinite alternate;
+
+        /* Top-right UI toggles */
+        #ui-toggles {
+            position: fixed;
+            top: 14px;
+            right: 14px;
+            z-index: 50;
+            display: flex;
+            gap: 8px;
         }
-        
-        @keyframes twinkle {
-            0% { opacity: 0.3; }
-            100% { opacity: 1; }
+        .toggle-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            background: rgba(18, 18, 26, 0.78);
+            border: 1px solid #2a2a36;
+            color: #808090;
+            font: 14px/1 system-ui, sans-serif;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.2s, color 0.2s, background 0.2s;
+            backdrop-filter: blur(6px);
+        }
+        .toggle-btn:hover { border-color: #d4a050; color: #f0c878; }
+        .toggle-btn[data-on="true"] {
+            color: #f0c878;
+            border-color: #d4a050;
+            background: rgba(212, 160, 80, 0.12);
+        }
+
+        /* CRT overlay (opt-in via body.crt) */
+        body.crt::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.28) 0 1px,
+                transparent 1px 3px
+            );
+            mix-blend-mode: multiply;
+        }
+        body.crt::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 101;
+            pointer-events: none;
+            background: radial-gradient(
+                ellipse at center,
+                transparent 48%,
+                rgba(0, 0, 0, 0.55) 100%
+            );
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .bird-svg .wing { animation: none !important; }
         }
         
         /* Header */
@@ -51,6 +101,27 @@
             display: block;
             margin-bottom: 10px;
             filter: drop-shadow(0 0 20px rgba(212, 160, 80, 0.4));
+        }
+
+        .bird-svg {
+            display: block;
+            width: 84px;
+            height: 84px;
+            margin: 0 auto 12px;
+            filter: drop-shadow(0 0 22px rgba(212, 160, 80, 0.55));
+            transition: filter 0.3s ease;
+        }
+        .bird-svg:hover {
+            filter: drop-shadow(0 0 32px rgba(240, 200, 120, 0.85));
+        }
+        .bird-svg .wing {
+            transform-origin: -5px 0;
+            animation: flap 2.4s ease-in-out infinite;
+        }
+        .bird-svg .wing.back { animation-delay: 0.12s; opacity: 0.72; }
+        @keyframes flap {
+            0%, 100% { transform: rotate(0deg); }
+            50%      { transform: rotate(-14deg); }
         }
         
         h1 {
@@ -390,10 +461,31 @@
     </style>
 </head>
 <body>
-    <div class="stars" id="stars"></div>
-    
+    <canvas id="bg-canvas"></canvas>
+
+    <div id="ui-toggles">
+        <button id="crt-toggle" class="toggle-btn" type="button" title="Toggle CRT overlay (scanlines + vignette)" aria-label="Toggle CRT overlay">▚</button>
+        <button id="sfx-toggle" class="toggle-btn" type="button" title="Toggle sound effects" aria-label="Toggle sound effects">♪</button>
+    </div>
+
     <header>
-        <span class="bird-icon">🐦</span>
+        <svg class="bird-svg" viewBox="0 0 100 100" aria-label="Sparrows emblem" role="img">
+            <defs>
+                <linearGradient id="birdGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#f0c878"/>
+                    <stop offset="1" stop-color="#a07030"/>
+                </linearGradient>
+            </defs>
+            <g transform="translate(50 52)">
+                <path class="wing back" d="M -6 0 Q -24 14 -34 22 Q -18 20 -2 11 Z" fill="url(#birdGrad)"/>
+                <ellipse cx="0" cy="5" rx="16" ry="10.5" fill="url(#birdGrad)"/>
+                <polygon points="-12,5 -24,2 -24,9" fill="url(#birdGrad)"/>
+                <circle cx="13" cy="-3" r="7.5" fill="url(#birdGrad)"/>
+                <polygon points="20,-4 26,-2 20,0" fill="#f0c878"/>
+                <circle cx="15" cy="-4" r="1.3" fill="#0a0a10"/>
+                <path class="wing" d="M -5 0 Q -26 -16 -38 -2 Q -26 9 -5 5 Z" fill="url(#birdGrad)"/>
+            </g>
+        </svg>
         <h1>THE SPARROWS</h1>
         <p class="subtitle">GENERATIONAL WARFARE</p>
         <p class="tagline">A browser-based action game series spanning 8 gaming eras</p>
@@ -607,22 +699,16 @@
             <a href="https://github.com/khaaliswooden-max/sparrows">View Source</a>
         </div>
         <p class="credits"><strong>Zuup Innovation Lab</strong> / <strong>Visionblox LLC</strong> • 2025</p>
-        <p class="tech-note">PURE HTML5 CANVAS + JAVASCRIPT • NO FRAMEWORKS • NO DEPENDENCIES</p>
+        <p class="tech-note">HTML5 CANVAS • WEB AUDIO • PHASER 4 • GSAP • JSFXR</p>
     </footer>
-    
-    <script>
-        // Generate stars
-        const starsContainer = document.getElementById('stars');
-        for (let i = 0; i < 100; i++) {
-            const star = document.createElement('div');
-            star.className = 'star';
-            star.style.left = Math.random() * 100 + '%';
-            star.style.top = Math.random() * 100 + '%';
-            star.style.width = (Math.random() * 2 + 1) + 'px';
-            star.style.height = star.style.width;
-            star.style.animationDelay = Math.random() * 3 + 's';
-            starsContainer.appendChild(star);
-        }
+
+    <script type="importmap">
+    { "imports": {
+        "gsap":               "https://esm.sh/gsap@3.15.0",
+        "gsap/ScrollTrigger": "https://esm.sh/gsap@3.15.0/ScrollTrigger",
+        "jsfxr":              "https://esm.sh/jsfxr@1.4.0"
+    }}
     </script>
+    <script type="module" src="./shared/libs/landing.js"></script>
 </body>
 </html>

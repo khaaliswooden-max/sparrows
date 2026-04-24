@@ -72,5 +72,23 @@ function rO(){cx.fillStyle=C.bk;cx.fillRect(0,0,W,H);const g=cx.createRadialGrad
 function rCr(){cx.fillStyle=C.bk;cx.fillRect(0,0,W,H);for(let i=0;i<90;i++){const x=(i*61+gt*0.14)%W,y=(i*37+gt*0.09)%H;cx.fillStyle=[C.nat,C.mar,C.any,C.olg,C.gd][i%5];cx.globalAlpha=0.28+Math.sin(gt*0.014+i)*0.18;cx.fillRect(x,y,1+(i%2),1+(i%2));}cx.globalAlpha=1;const sc=Math.max(0,tm-55)*0.28;cx.save();cx.translate(0,-sc);let y=H+45;cx.fillStyle=C.gd;cx.font='bold 30px "Bebas Neue",sans-serif';cx.fillText('THE SPARROWS',W/2-82,y);y+=32;cx.fillStyle=C.wh;cx.font='bold 16px "Bebas Neue",sans-serif';cx.fillText('RESOLUTION',W/2-48,y);y+=45;cx.fillStyle=C.md;cx.font='9px "Inter",sans-serif';cx.fillText('Created by',W/2-28,y);y+=16;cx.fillStyle=C.gd;cx.font='bold 11px "Inter",sans-serif';cx.fillText('ZUUP INNOVATION LAB',W/2-62,y);y+=14;cx.fillText('VISIONBLOX LLC',W/2-48,y);y+=36;cx.fillStyle=C.md;cx.font='9px "Inter",sans-serif';cx.fillText('THE SPARROWS',W/2-36,y);y+=22;[[C.nat,'CIPHER','NATASHA'],[C.mar,'VENOM','MARIA'],[C.any,'HAWK','ANYA'],[C.olg,'ORACLE','OLGA']].forEach(c=>{cx.fillStyle=c[0];cx.font='bold 9px "Inter",sans-serif';cx.fillText(c[1],W/2-65,y);cx.fillStyle=C.lt;cx.font='8px "Inter",sans-serif';cx.fillText(c[2],W/2+5,y);y+=16;});y+=28;cx.fillStyle=C.md;cx.font='8px "Inter",sans-serif';cx.fillText('Eight seasons. One story.',W/2-52,y);y+=14;cx.fillText('Four sisters. Finally free.',W/2-52,y);y+=36;cx.fillStyle=C.gd;cx.font='9px "Inter",sans-serif';cx.fillText('Thank you for playing.',W/2-52,y);y+=45;cx.fillStyle=C.gy;cx.font='7px "Inter",sans-serif';cx.fillText('© 2025 Zuup Innovation Lab / Visionblox LLC',W/2-90,y);cx.restore();if(tm>280&&Math.floor(gt/38)%2===0){cx.fillStyle=C.gd;cx.font='9px "Inter",sans-serif';cx.fillText('Press START',W/2-30,H-18);}}
 function lp(){up();rd();requestAnimationFrame(lp);}lp();
 </script>
+    <script type="importmap">
+    { "imports": {
+        "nipplejs":       "https://esm.sh/nipplejs@1.0.1",
+        "hotkeys-js":     "https://esm.sh/hotkeys-js@4.0.3",
+        "localforage":    "https://esm.sh/localforage@1.10.0",
+        "tone":           "https://esm.sh/tone@15.1.22",
+        "howler":         "https://esm.sh/howler@2.2.4",
+        "jsfxr":          "https://esm.sh/jsfxr@1.4.0",
+        "gsap":           "https://esm.sh/gsap@3.15.0",
+        "lil-gui":        "https://esm.sh/lil-gui@0.21.0",
+        "pixi.js":        "https://esm.sh/pixi.js@8.18.1",
+        "pixi-filters":   "https://esm.sh/pixi-filters@6.1.5",
+        "mousetrap":      "https://esm.sh/mousetrap@1.6.5",
+        "zustand/vanilla":"https://esm.sh/zustand@5.0.12/vanilla",
+        "phaser":         "https://esm.sh/phaser@4.0.0"
+    }}
+    </script>
+    <script type="module" src="../../shared/libs/enhance.js"></script>
 </body>
 </html>

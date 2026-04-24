@@ -35,5 +35,11 @@ export default defineConfig({
   server: {
     port: 3000,
     open: '/seasons/season-phaser-template/index.html',
+    watch: {
+      // The LPC generator clone in vendor/ contains 153k files and would blow
+      // past the OS file-watcher limit (ENOSPC). Only the extracted PNGs in
+      // shared/assets/characters/ matter at runtime.
+      ignored: ['**/vendor/**', '**/dist/**', '**/.git/**'],
+    },
   },
 });

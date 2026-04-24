@@ -363,6 +363,7 @@
         // Characters with 16-bit enhanced stats
         const CHARACTERS = [
             {
+                key: 'cipher',
                 name: 'NATASHA',
                 role: 'TECH OPS',
                 color: PALETTE.cyan,
@@ -379,6 +380,7 @@
                 description: 'DISABLES ELECTRONICS'
             },
             {
+                key: 'venom',
                 name: 'MARIA',
                 role: 'STRIKER',
                 color: PALETTE.green,
@@ -395,6 +397,7 @@
                 description: 'RAPID MELEE BARRAGE'
             },
             {
+                key: 'hawk',
                 name: 'ANYA',
                 role: 'MARKSMAN',
                 color: PALETTE.orange,
@@ -411,6 +414,7 @@
                 description: 'PENETRATES ALL TARGETS'
             },
             {
+                key: 'oracle',
                 name: 'OLGA',
                 role: 'TACTICIAN',
                 color: PALETTE.purple,
@@ -2098,14 +2102,29 @@
         }
         
         function renderCharacterSprite(x, y, char, frame, facingRight, scale = 1) {
+            // Prefer the LPC composite sprite when shared/assets/characters has loaded.
+            const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
+            if (sparrowsCharacters && char.key) {
+                // Map the season's pixel anchor (top-left of legacy sprite, ~32x44 footprint)
+                // to the renderer's centre-bottom anchor.
+                const drew = sparrowsCharacters.drawCharacter(ctx, {
+                    x: x + 14 * scale,
+                    y: y + 44 * scale,
+                    key: char.key,
+                    animation: 'walk',
+                    frame: Math.round(frame),
+                    facingRight,
+                    scale: 0.9 * scale,
+                });
+                if (drew) return;
+            }
+
             ctx.save();
-            
             if (!facingRight) {
                 ctx.translate(x + 14 * scale, 0);
                 ctx.scale(-1, 1);
                 x = 0;
             }
-            
             const s = scale;
             
             // Legs

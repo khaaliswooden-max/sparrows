@@ -156,12 +156,14 @@ ns.hotkeys = hotkeys;
   const bar = document.createElement('div');
   bar.className = 'sparrows-toggles';
   bar.innerHTML = `
-    <button type="button" data-role="crt" title="Toggle CRT overlay" aria-label="Toggle CRT overlay">▚</button>
+    <button type="button" data-role="crt"  title="Toggle CRT overlay (CSS)" aria-label="Toggle CRT overlay">▚</button>
+    <button type="button" data-role="pcrt" title="Premium CRT (Pixi shader — heavier)" aria-label="Premium CRT shader">◉</button>
     <button type="button" data-role="mute" title="Toggle mute (M)" aria-label="Toggle mute">♪</button>
   `;
   document.body.appendChild(bar);
 
-  const crtBtn = bar.querySelector('[data-role="crt"]');
+  const crtBtn  = bar.querySelector('[data-role="crt"]');
+  const pcrtBtn = bar.querySelector('[data-role="pcrt"]');
   const muteBtn = bar.querySelector('[data-role="mute"]');
 
   const syncCrt = () => { crtBtn.dataset.on = document.body.classList.contains('sparrows-crt'); };
@@ -185,6 +187,120 @@ ns.hotkeys = hotkeys;
   syncCrt();
   syncMute();
   ns.toggleBar = bar;
+
+  // -------- Premium CRT (Pixi CRTFilter over the game canvas) --------------
+  let pcrt = null; // { app, sprite, texture, filter, overlay, rafId }
+
+  const enablePremiumCrt = async () => {
+    if (pcrt) return true;
+    try {
+      const [pixi, pf] = await Promise.all([import('pixi.js'), import('pixi-filters')]);
+      const { Application, Sprite, Texture } = pixi;
+      const { CRTFilter } = pf;
+      const src = document.querySelector('canvas');
+      if (!src) throw new Error('no game canvas found');
+
+      const overlay = document.createElement('canvas');
+      overlay.id = 'sparrows-pcrt-overlay';
+      Object.assign(overlay.style, {
+        position: 'fixed', pointerEvents: 'none', zIndex: 9988,
+        imageRendering: 'pixelated',
+      });
+      document.body.appendChild(overlay);
+
+      const app = new Application();
+      await app.init({
+        canvas: overlay,
+        width: src.width || 320,
+        height: src.height || 240,
+        backgroundAlpha: 0,
+        antialias: false,
+        autoDensity: true,
+        resolution: 1,
+      });
+
+      const texture = Texture.from(src);
+      const sprite = new Sprite(texture);
+      const filter = new CRTFilter({
+        curvature: 3,
+        lineWidth: 2.4,
+        lineContrast: 0.28,
+        noise: 0.18,
+        noiseSize: 1,
+        vignetting: 0.32,
+        vignettingAlpha: 0.7,
+        vignettingBlur: 0.3,
+        time: 0,
+      });
+      sprite.filters = [filter];
+      app.stage.addChild(sprite);
+
+      const syncRect = () => {
+        const r = src.getBoundingClientRect();
+        overlay.style.left = r.left + 'px';
+        overlay.style.top = r.top + 'px';
+        overlay.style.width = r.width + 'px';
+        overlay.style.height = r.height + 'px';
+        if (app.renderer.width !== src.width || app.renderer.height !== src.height) {
+          app.renderer.resize(src.width, src.height);
+          sprite.width = src.width;
+          sprite.height = src.height;
+        }
+      };
+      syncRect();
+
+      let tick = 0;
+      const step = () => {
+        texture.source.update();
+        filter.time = (tick += 0.5);
+        syncRect();
+        pcrt.rafId = requestAnimationFrame(step);
+      };
+
+      pcrt = { app, sprite, texture, filter, overlay, rafId: 0 };
+      pcrt.rafId = requestAnimationFrame(step);
+      return true;
+    } catch (err) {
+      console.warn('[Sparrows] Premium CRT unavailable:', err.message || err);
+      return false;
+    }
+  };
+
+  const disablePremiumCrt = () => {
+    if (!pcrt) return;
+    cancelAnimationFrame(pcrt.rafId);
+    try { pcrt.app.destroy(true, { children: true, texture: true }); } catch {}
+    pcrt.overlay.remove();
+    pcrt = null;
+  };
+
+  const setPcrtButton = (state) => {
+    pcrtBtn.dataset.on = state;
+    pcrtBtn.disabled = state === 'busy';
+  };
+
+  pcrtBtn.addEventListener('click', async () => {
+    if (pcrt) {
+      disablePremiumCrt();
+      setPcrtButton('false');
+      localStorage.setItem('sparrows:pcrt', 'off');
+    } else {
+      setPcrtButton('busy');
+      const ok = await enablePremiumCrt();
+      setPcrtButton(ok ? 'true' : 'false');
+      if (ok) localStorage.setItem('sparrows:pcrt', 'on');
+    }
+  });
+
+  if (localStorage.getItem('sparrows:pcrt') === 'on') {
+    setPcrtButton('busy');
+    enablePremiumCrt().then((ok) => setPcrtButton(ok ? 'true' : 'false'));
+  } else {
+    setPcrtButton('false');
+  }
+
+  ns.enablePremiumCrt = enablePremiumCrt;
+  ns.disablePremiumCrt = disablePremiumCrt;
 }
 
 // ---------------------------------------------------------------------------

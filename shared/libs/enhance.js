@@ -40,6 +40,7 @@ let muted = false;
   ns.setMuted = (on) => {
     muted = !!on;
     ctxs.forEach((c) => (muted ? c.suspend?.() : c.resume?.()));
+    window.dispatchEvent(new CustomEvent('sparrows:mute', { detail: muted }));
   };
   ns.isMuted = () => muted;
 })();
@@ -76,6 +77,78 @@ hotkeys('shift+/', () => {
 });
 
 ns.hotkeys = hotkeys;
+
+// ---------------------------------------------------------------------------
+// Universal toggle bar (top-right) + CRT scanline/vignette overlay.
+// Persisted in localStorage; mute button stays in sync with M hotkey.
+// ---------------------------------------------------------------------------
+{
+  const style = document.createElement('style');
+  style.textContent = `
+    body.sparrows-crt::before {
+      content: ''; position: fixed; inset: 0; z-index: 9990; pointer-events: none;
+      background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0 1px, transparent 1px 3px);
+      mix-blend-mode: multiply;
+    }
+    body.sparrows-crt::after {
+      content: ''; position: fixed; inset: 0; z-index: 9991; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.55) 100%);
+    }
+    .sparrows-toggles {
+      position: fixed; top: 10px; right: 10px; z-index: 9995;
+      display: flex; gap: 6px;
+    }
+    .sparrows-toggles button {
+      width: 34px; height: 34px; border-radius: 6px;
+      background: rgba(18,18,26,0.72); border: 1px solid #2a2a36;
+      color: #9090a0; font: 14px/1 system-ui, sans-serif;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+      backdrop-filter: blur(4px); padding: 0;
+    }
+    .sparrows-toggles button:hover { color: #f0c878; border-color: #d4a050; }
+    .sparrows-toggles button[data-on="true"] {
+      color: #f0c878; border-color: #d4a050; background: rgba(212,160,80,0.12);
+    }
+  `;
+  document.head.appendChild(style);
+
+  if (localStorage.getItem('sparrows:crt') === 'on') document.body.classList.add('sparrows-crt');
+  if (localStorage.getItem('sparrows:mute') === 'on') ns.setMuted?.(true);
+
+  const bar = document.createElement('div');
+  bar.className = 'sparrows-toggles';
+  bar.innerHTML = `
+    <button type="button" data-role="crt" title="Toggle CRT overlay" aria-label="Toggle CRT overlay">▚</button>
+    <button type="button" data-role="mute" title="Toggle mute (M)" aria-label="Toggle mute">♪</button>
+  `;
+  document.body.appendChild(bar);
+
+  const crtBtn = bar.querySelector('[data-role="crt"]');
+  const muteBtn = bar.querySelector('[data-role="mute"]');
+
+  const syncCrt = () => { crtBtn.dataset.on = document.body.classList.contains('sparrows-crt'); };
+  const syncMute = () => { muteBtn.dataset.on = !!ns.isMuted?.(); };
+
+  crtBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('sparrows-crt');
+    localStorage.setItem('sparrows:crt', on ? 'on' : 'off');
+    syncCrt();
+  });
+  muteBtn.addEventListener('click', () => {
+    const on = !ns.isMuted?.();
+    ns.setMuted?.(on);
+    localStorage.setItem('sparrows:mute', on ? 'on' : 'off');
+  });
+  window.addEventListener('sparrows:mute', (e) => {
+    localStorage.setItem('sparrows:mute', e.detail ? 'on' : 'off');
+    syncMute();
+  });
+
+  syncCrt();
+  syncMute();
+  ns.toggleBar = bar;
+}
 
 // ---------------------------------------------------------------------------
 // Virtual joystick on touch devices (skip mobile.html — they have custom UIs)

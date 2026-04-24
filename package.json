@@ -12,7 +12,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "phaser": "^4.0.0"
+    "gsap": "^3.15.0",
+    "hotkeys-js": "^4.0.3",
+    "howler": "^2.2.4",
+    "jsfxr": "^1.4.0",
+    "lil-gui": "^0.21.0",
+    "localforage": "^1.10.0",
+    "mousetrap": "^1.6.5",
+    "nipplejs": "^1.0.1",
+    "phaser": "^4.0.0",
+    "pixi-filters": "^6.1.5",
+    "tone": "^15.1.22",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "vite": "^5.4.0"

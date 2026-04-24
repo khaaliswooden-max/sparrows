@@ -19,6 +19,43 @@ ns.load = (key) => localforage.getItem(key);
 ns.clearSaves = () => localforage.clear();
 ns.localforage = localforage;
 
+// Per-season progress API, auto-scoped by URL path
+// e.g. /seasons/season3-snes/index.html → slug "season3-snes"
+const seasonSlug = location.pathname.match(/\/seasons\/([^/]+)\//)?.[1] ?? null;
+ns.seasonSlug = seasonSlug;
+ns.progress = {
+  async set(key, val) {
+    if (!seasonSlug) return;
+    await localforage.setItem(`p:${seasonSlug}:${key}`, val);
+  },
+  async get(key) {
+    if (!seasonSlug) return null;
+    return localforage.getItem(`p:${seasonSlug}:${key}`);
+  },
+  async all(slug = seasonSlug) {
+    if (!slug) return {};
+    const out = {};
+    const prefix = `p:${slug}:`;
+    await localforage.iterate((v, k) => { if (k.startsWith(prefix)) out[k.slice(prefix.length)] = v; });
+    return out;
+  },
+  async lastSession() { return localforage.getItem('lastSession'); },
+  async clearSeason(slug = seasonSlug) {
+    if (!slug) return;
+    const keys = [];
+    await localforage.iterate((_v, k) => { if (k.startsWith(`p:${slug}:`)) keys.push(k); });
+    await Promise.all(keys.map((k) => localforage.removeItem(k)));
+  },
+};
+if (seasonSlug) {
+  localforage.setItem('lastSession', {
+    season: seasonSlug,
+    url: location.pathname,
+    mobile: /\/mobile\.html$/.test(location.pathname),
+    t: Date.now(),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // AudioContext tracking + global mute (patched before any season creates one,
 // since module scripts defer until season's lazy initAudio is user-triggered)

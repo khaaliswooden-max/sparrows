@@ -4,6 +4,9 @@
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { sfxr } from 'jsfxr';
+import localforage from 'localforage';
+
+localforage.config({ name: 'sparrows', storeName: 'saves' });
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -179,6 +182,27 @@ if (!reduced) {
       }
     };
     setTimeout(step, 700);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// "Continue" banner — surfaces last visited season from localforage
+// ---------------------------------------------------------------------------
+{
+  const banner = q('#continue-banner');
+  if (banner) {
+    localforage.getItem('lastSession').then((s) => {
+      if (!s || !s.season) return;
+      const ageH = (Date.now() - s.t) / 3600e3;
+      if (ageH > 30 * 24) return; // hide after 30 days
+      const num = s.season.match(/season(\d)/)?.[1];
+      if (!num) return;
+      const link = banner.querySelector('a');
+      link.href = s.url;
+      banner.querySelector('.cont-label').textContent = `SEASON ${num}${s.mobile ? ' • MOBILE' : ''}`;
+      banner.hidden = false;
+      if (!reduced) gsap.from(banner, { y: -20, opacity: 0, duration: 0.6, delay: 0.2, ease: 'power2.out' });
+    });
   }
 }
 

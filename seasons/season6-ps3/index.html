@@ -94,10 +94,10 @@
         let globalTimer = 0;
         
         const CHARACTERS = [
-            { id: 'natasha', name: 'NATASHA', codename: 'CIPHER', role: 'TECH', color: COLORS.natasha, weapon: 'SMG', ability: 'EMP BURST', stats: { health: 90, damage: 8, fireRate: 5 } },
-            { id: 'maria', name: 'MARIA', codename: 'VENOM', role: 'ASSAULT', color: COLORS.maria, weapon: 'RIFLE', ability: 'FURY MODE', stats: { health: 120, damage: 12, fireRate: 3 } },
-            { id: 'anya', name: 'ANYA', codename: 'HAWK', role: 'MARKSMAN', color: COLORS.anya, weapon: 'SNIPER', ability: 'DEAD EYE', stats: { health: 80, damage: 35, fireRate: 1 } },
-            { id: 'olga', name: 'OLGA', codename: 'ORACLE', role: 'SUPPORT', color: COLORS.olga, weapon: 'PISTOL', ability: 'TACTICAL SCAN', stats: { health: 85, damage: 10, fireRate: 2 } }
+            { key: 'cipher', id: 'natasha', name: 'NATASHA', codename: 'CIPHER', role: 'TECH', color: COLORS.natasha, weapon: 'SMG', ability: 'EMP BURST', stats: { health: 90, damage: 8, fireRate: 5 } },
+            { key: 'venom', id: 'maria', name: 'MARIA', codename: 'VENOM', role: 'ASSAULT', color: COLORS.maria, weapon: 'RIFLE', ability: 'FURY MODE', stats: { health: 120, damage: 12, fireRate: 3 } },
+            { key: 'hawk', id: 'anya', name: 'ANYA', codename: 'HAWK', role: 'MARKSMAN', color: COLORS.anya, weapon: 'SNIPER', ability: 'DEAD EYE', stats: { health: 80, damage: 35, fireRate: 1 } },
+            { key: 'oracle', id: 'olga', name: 'OLGA', codename: 'ORACLE', role: 'SUPPORT', color: COLORS.olga, weapon: 'PISTOL', ability: 'TACTICAL SCAN', stats: { health: 85, damage: 10, fireRate: 2 } }
         ];
         
         let player = {
@@ -555,7 +555,9 @@
                 ctx.fillStyle = sel ? COLORS.darkGray : COLORS.black; ctx.fillRect(x, y, 130, 180);
                 if (sel) { ctx.strokeStyle = c.color; ctx.lineWidth = 3; ctx.strokeRect(x, y, 130, 180); }
                 ctx.fillStyle = c.color; ctx.globalAlpha = 0.3; ctx.fillRect(x + 10, y + 10, 110, 70); ctx.globalAlpha = 1;
-                ctx.fillStyle = c.color; ctx.fillRect(x + 45, y + 25, 40, 50); ctx.fillRect(x + 52, y + 15, 26, 16);
+                const sparrowsChars = window.Sparrows && window.Sparrows.characters;
+                const drewSil = sparrowsChars && c.key && sparrowsChars.drawCharacter(ctx, { x: x + 65, y: y + 78, key: c.key, animation: 'walk', frame: 0, facingRight: true, scale: 1.15 });
+                if (!drewSil) { ctx.fillStyle = c.color; ctx.fillRect(x + 45, y + 25, 40, 50); ctx.fillRect(x + 52, y + 15, 26, 16); }
                 ctx.fillStyle = COLORS.white; ctx.font = 'bold 11px "Inter", sans-serif'; ctx.fillText(c.codename, x + 10, y + 100);
                 ctx.fillStyle = c.color; ctx.font = '9px "Inter", sans-serif'; ctx.fillText(c.name, x + 10, y + 115);
                 ctx.fillStyle = COLORS.lightGray; ctx.font = '8px "Inter", sans-serif'; ctx.fillText(c.role, x + 10, y + 130);
@@ -596,20 +598,31 @@
                 if (e.revealed) { ctx.strokeStyle = COLORS.olga; ctx.lineWidth = 2; ctx.strokeRect(e.x - e.width, e.y - e.height - 15, e.width * 2, e.height + 20); }
             });
             
+            const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
             squad.forEach(m => {
                 if (!m.alive) return;
                 ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(m.x, mission.height - 20, 10, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-                ctx.fillStyle = m.char.color; ctx.fillRect(m.x - 10, m.y - 28, 20, 30); ctx.fillRect(m.x - 7, m.y - 38, 14, 12);
+                const drewSquad = sparrowsCharacters && m.char.key && sparrowsCharacters.drawCharacter(ctx, {
+                    x: m.x, y: m.y + 2, key: m.char.key, animation: 'walk',
+                    frame: Math.floor(globalTimer / 6) + (m.x | 0), facingRight: m.facingRight !== false, scale: 0.75,
+                });
+                if (!drewSquad) { ctx.fillStyle = m.char.color; ctx.fillRect(m.x - 10, m.y - 28, 20, 30); ctx.fillRect(m.x - 7, m.y - 38, 14, 12); }
                 ctx.fillStyle = COLORS.darkGray; ctx.fillRect(m.x - 15, m.y - 48, 30, 4); ctx.fillStyle = m.health > 30 ? COLORS.health : COLORS.healthLow; ctx.fillRect(m.x - 15, m.y - 48, 30 * (m.health / m.maxHealth), 4);
             });
-            
+
             const char = CHARACTERS[player.charIndex], vis = !player.invincible || Math.floor(globalTimer / 4) % 2 === 0;
             if (vis) {
                 ctx.fillStyle = COLORS.black; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(player.x, mission.height - 20, 12, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-                ctx.fillStyle = player.inCover ? COLORS.darkGray : char.color;
-                const by = player.inCover ? player.y - 20 : player.y - player.height, bh = player.inCover ? 22 : player.height;
-                ctx.fillRect(player.x - 12, by, 24, bh);
-                ctx.fillStyle = char.color; const hy = player.inCover ? player.y - 32 : player.y - player.height - 14; ctx.fillRect(player.x - 8, hy, 16, 14);
+                const drewPlayer = !player.inCover && sparrowsCharacters && char.key && sparrowsCharacters.drawCharacter(ctx, {
+                    x: player.x, y: player.y, key: char.key, animation: 'walk',
+                    frame: Math.floor(globalTimer / 5), facingRight: player.facingRight !== false, scale: 0.85,
+                });
+                if (!drewPlayer) {
+                    ctx.fillStyle = player.inCover ? COLORS.darkGray : char.color;
+                    const by = player.inCover ? player.y - 20 : player.y - player.height, bh = player.inCover ? 22 : player.height;
+                    ctx.fillRect(player.x - 12, by, 24, bh);
+                    ctx.fillStyle = char.color; const hy = player.inCover ? player.y - 32 : player.y - player.height - 14; ctx.fillRect(player.x - 8, hy, 16, 14);
+                }
                 if (player.abilityActive) { ctx.strokeStyle = char.color; ctx.globalAlpha = 0.6 + Math.sin(globalTimer * 0.2) * 0.3; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(player.x, player.y - 16, 25 + Math.sin(globalTimer * 0.1) * 5, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
             }
             

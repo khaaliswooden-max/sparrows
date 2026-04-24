@@ -227,6 +227,7 @@
         // Characters - now rogue operatives
         const CHARACTERS = [
             {
+                key: 'cipher',
                 name: 'NATASHA GANNIBAL',
                 codename: 'CIPHER',
                 status: 'ROGUE OPERATIVE',
@@ -238,6 +239,7 @@
                 stats: { stealth: 8, combat: 6, tech: 10, endurance: 7 }
             },
             {
+                key: 'venom',
                 name: 'MARIA KOFI',
                 codename: 'VENOM',
                 status: 'ROGUE OPERATIVE',
@@ -249,6 +251,7 @@
                 stats: { stealth: 7, combat: 10, tech: 5, endurance: 9 }
             },
             {
+                key: 'hawk',
                 name: 'ANYA DELGADO',
                 codename: 'HAWK',
                 status: 'ROGUE OPERATIVE',
@@ -260,6 +263,7 @@
                 stats: { stealth: 9, combat: 8, tech: 6, endurance: 6 }
             },
             {
+                key: 'oracle',
                 name: 'OLGA HASSANOVA',
                 codename: 'ORACLE',
                 status: 'STATUS UNKNOWN',
@@ -1770,10 +1774,22 @@
                 ctx.fillRect(x + 10, y + 10, 90, 70);
                 ctx.globalAlpha = 1;
                 
-                // Silhouette
-                ctx.fillStyle = locked ? COLORS.gray : char.color;
-                ctx.fillRect(x + 38, y + 25, 34, 45);
-                ctx.fillRect(x + 43, y + 15, 24, 20);
+                // Silhouette — LPC sprite when available, fall back to rectangles
+                const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
+                const drewPortrait = !locked && sparrowsCharacters && char.key && sparrowsCharacters.drawCharacter(ctx, {
+                    x: x + 55,
+                    y: y + 75,
+                    key: char.key,
+                    animation: 'walk',
+                    frame: 0,
+                    facingRight: true,
+                    scale: 1.0,
+                });
+                if (!drewPortrait) {
+                    ctx.fillStyle = locked ? COLORS.gray : char.color;
+                    ctx.fillRect(x + 38, y + 25, 34, 45);
+                    ctx.fillRect(x + 43, y + 15, 24, 20);
+                }
                 
                 if (locked) {
                     ctx.fillStyle = COLORS.red;
@@ -2084,10 +2100,22 @@
                 ctx.ellipse(player.x, player.y + 3, 8, 4, 0, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Body
-                ctx.fillStyle = player.crouching || player.inCover ? char.darkColor : playerColor;
+                // Body — prefer LPC sprite, fall back to coloured square.
+                const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
                 const size = player.crouching ? 12 : 14;
-                ctx.fillRect(player.x - size/2, player.y - size/2, size, size);
+                const drewSprite = sparrowsCharacters && char.key && visionMode === VISION.NORMAL && sparrowsCharacters.drawCharacter(ctx, {
+                    x: player.x,
+                    y: player.y + size / 2,
+                    key: char.key,
+                    animation: 'walk',
+                    frame: Math.floor(globalTimer / 6),
+                    facingRight: Math.cos(player.angle) >= 0,
+                    scale: player.crouching ? 0.32 : 0.38,
+                });
+                if (!drewSprite) {
+                    ctx.fillStyle = player.crouching || player.inCover ? char.darkColor : playerColor;
+                    ctx.fillRect(player.x - size/2, player.y - size/2, size, size);
+                }
                 
                 // Direction
                 const pdx = Math.cos(player.angle) * 10;

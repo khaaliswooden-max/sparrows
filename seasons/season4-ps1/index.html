@@ -196,6 +196,7 @@
         // Characters
         const CHARACTERS = [
             {
+                key: 'cipher',
                 name: 'NATASHA',
                 codename: 'CIPHER',
                 specialty: 'ELECTRONIC WARFARE',
@@ -208,6 +209,7 @@
                 tech: 10
             },
             {
+                key: 'venom',
                 name: 'MARIA',
                 codename: 'VENOM',
                 specialty: 'CQC EXPERT',
@@ -220,6 +222,7 @@
                 tech: 5
             },
             {
+                key: 'hawk',
                 name: 'ANYA',
                 codename: 'HAWK',
                 specialty: 'MARKSMAN',
@@ -232,6 +235,7 @@
                 tech: 6
             },
             {
+                key: 'oracle',
                 name: 'OLGA',
                 codename: 'ORACLE',
                 specialty: 'INTELLIGENCE',
@@ -1522,10 +1526,22 @@
                 ctx.fillRect(x + 5, y + 5, 55, 50);
                 ctx.globalAlpha = 1;
                 
-                // Silhouette
-                ctx.fillStyle = char.color;
-                ctx.fillRect(x + 22, y + 15, 20, 35);
-                ctx.fillRect(x + 25, y + 8, 14, 14);
+                // Silhouette — prefer LPC sprite, fall back to coloured rectangles
+                const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
+                const drewPortrait = sparrowsCharacters && char.key && sparrowsCharacters.drawCharacter(ctx, {
+                    x: x + 32,
+                    y: y + 52,
+                    key: char.key,
+                    animation: 'walk',
+                    frame: 0,
+                    facingRight: true,
+                    scale: 0.7,
+                });
+                if (!drewPortrait) {
+                    ctx.fillStyle = char.color;
+                    ctx.fillRect(x + 22, y + 15, 20, 35);
+                    ctx.fillRect(x + 25, y + 8, 14, 14);
+                }
                 
                 // Info
                 ctx.fillStyle = COLORS.white;
@@ -1744,12 +1760,27 @@
                 ctx.beginPath();
                 ctx.ellipse(player.x, player.y + 2, 6, 3, 0, 0, Math.PI * 2);
                 ctx.fill();
-                
-                // Body
-                ctx.fillStyle = player.sneaking ? char.darkColor : char.color;
-                ctx.fillRect(player.x - 6, player.y - 6, 12, 12);
-                
-                // Direction
+
+                // Body — prefer LPC sprite, fall back to coloured square.
+                const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
+                let drewSprite = false;
+                if (sparrowsCharacters && char.key) {
+                    drewSprite = sparrowsCharacters.drawCharacter(ctx, {
+                        x: player.x,
+                        y: player.y + 8,
+                        key: char.key,
+                        animation: 'walk',
+                        frame: Math.floor(globalTimer / 6),
+                        facingRight: Math.cos(player.angle) >= 0,
+                        scale: 0.32,
+                    });
+                }
+                if (!drewSprite) {
+                    ctx.fillStyle = player.sneaking ? char.darkColor : char.color;
+                    ctx.fillRect(player.x - 6, player.y - 6, 12, 12);
+                }
+
+                // Direction reticle (always drawn — top-down stealth needs the LOS cue)
                 const dx = Math.cos(player.angle) * 8;
                 const dy = Math.sin(player.angle) * 8;
                 ctx.strokeStyle = COLORS.white;

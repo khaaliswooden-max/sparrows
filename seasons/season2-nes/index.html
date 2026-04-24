@@ -310,6 +310,7 @@
         // Characters
         const CHARACTERS = [
             {
+                key: 'cipher',
                 name: 'NATASHA',
                 role: 'HACKER',
                 color: NES_PALETTE.cyan,
@@ -322,6 +323,7 @@
                 special: 'EMP BURST'
             },
             {
+                key: 'venom',
                 name: 'MARIA',
                 role: 'COMBAT',
                 color: NES_PALETTE.green,
@@ -334,6 +336,7 @@
                 special: 'RAPID STRIKE'
             },
             {
+                key: 'hawk',
                 name: 'ANYA',
                 role: 'SNIPER',
                 color: NES_PALETTE.orange,
@@ -346,6 +349,7 @@
                 special: 'PIERCING SHOT'
             },
             {
+                key: 'oracle',
                 name: 'OLGA',
                 role: 'STRATEGY',
                 color: NES_PALETTE.purple,
@@ -1633,9 +1637,24 @@
         }
         
         function drawCharacter(x, y, char, frame, facingRight, scale = 1, attacking = false) {
+            // Prefer the LPC composite sprite when shared/assets/characters has loaded.
+            const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
+            if (sparrowsCharacters && char.key) {
+                const drew = sparrowsCharacters.drawCharacter(ctx, {
+                    x: x + 8 * scale,
+                    y: y + 24 * scale,
+                    key: char.key,
+                    animation: attacking ? 'slash' : 'walk',
+                    frame: Math.round(frame),
+                    facingRight,
+                    scale: 0.55 * scale,
+                });
+                if (drew) return;
+            }
+
             const s = scale;
             const flip = facingRight ? 1 : -1;
-            
+
             ctx.save();
             if (!facingRight) {
                 ctx.translate(x + 8 * s, 0);

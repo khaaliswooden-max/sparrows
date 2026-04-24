@@ -228,27 +228,69 @@ if (isTouch && !isMobileHtml) {
   });
   joy.on('end', () => ['up', 'down', 'left', 'right'].forEach((d) => press(d, false)));
 
-  const btn = document.createElement('div');
-  btn.id = 'sparrows-action';
-  btn.textContent = 'A';
-  Object.assign(btn.style, {
-    position: 'fixed', right: '22px', bottom: '48px',
-    width: '78px', height: '78px', borderRadius: '50%',
-    background: 'rgba(212,160,80,0.22)', color: '#fff',
-    font: 'bold 24px system-ui, sans-serif',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    userSelect: 'none', touchAction: 'none', zIndex: 9998,
-    border: '2px solid rgba(212,160,80,0.6)',
+  // Per-season action button config — declared by era controls in README.
+  // Each entry: { l: label, code: KeyboardEvent.code, key?: KeyboardEvent.key }
+  const BUTTONS = {
+    'season1-atari':   [{ l: 'ACT',  code: 'Space' }],
+    'season2-nes':     [{ l: 'JMP',  code: 'KeyZ' }, { l: 'ATK',  code: 'KeyX' }, { l: 'SW',  code: 'KeyC' }],
+    'season3-snes':    [{ l: 'ATK',  code: 'KeyZ' }, { l: 'JMP',  code: 'KeyX' }, { l: 'SPC', code: 'KeyC' }, { l: 'SW', code: 'KeyA' }],
+    'season4-ps1':     [{ l: 'INT',  code: 'Space' }, { l: 'CQC', code: 'KeyE' }, { l: 'GDG', code: 'KeyQ' }, { l: 'SNK', code: 'ShiftLeft' }],
+    'season5-ps2':     [{ l: 'INT',  code: 'Space' }, { l: 'TKD', code: 'KeyE' }, { l: 'VIS', code: 'KeyF' }, { l: 'ABL', code: 'KeyQ' }],
+    'season6-ps3':     [{ l: 'COV',  code: 'Space' }, { l: 'RLD', code: 'KeyR' }, { l: 'ABL', code: 'KeyQ' }],
+    'season7-ps4':     [{ l: 'COV',  code: 'Space' }, { l: 'RLD', code: 'KeyR' }, { l: 'ABL', code: 'KeyQ' }, { l: 'MED', code: 'KeyH' }],
+    'season8-current': [{ l: 'DG',   code: 'Space' }, { l: 'RLD', code: 'KeyR' }, { l: 'ABL', code: 'KeyQ' }, { l: 'ULT', code: 'KeyE' }],
+  };
+  const keyForCode = (code) => {
+    if (code === 'Space') return ' ';
+    if (code.startsWith('Key')) return code.slice(3).toLowerCase();
+    if (code.startsWith('Digit')) return code.slice(5);
+    if (code === 'ShiftLeft' || code === 'ShiftRight') return 'Shift';
+    if (code === 'ControlLeft' || code === 'ControlRight') return 'Control';
+    if (code === 'AltLeft' || code === 'AltRight') return 'Alt';
+    return code;
+  };
+  const synth = (code, on) => {
+    document.dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', {
+      key: keyForCode(code), code,
+      bubbles: true, cancelable: true,
+      shiftKey: code.startsWith('Shift'),
+      ctrlKey: code.startsWith('Control'),
+      altKey: code.startsWith('Alt'),
+    }));
+  };
+
+  const buttons = BUTTONS[seasonSlug] ?? [{ l: 'A', code: 'Space' }];
+  const pad = document.createElement('div');
+  pad.id = 'sparrows-action-pad';
+  Object.assign(pad.style, {
+    position: 'fixed', right: '16px', bottom: '20px',
+    display: 'grid', gap: '6px', zIndex: 9998,
+    gridTemplateColumns: buttons.length >= 3 ? '1fr 1fr' : '1fr',
   });
-  const space = (on) => document.dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', {
-    key: ' ', code: 'Space', bubbles: true, cancelable: true,
-  }));
-  btn.addEventListener('touchstart', (e) => { e.preventDefault(); space(true); });
-  btn.addEventListener('touchend', (e) => { e.preventDefault(); space(false); });
-  btn.addEventListener('touchcancel', () => space(false));
-  document.body.appendChild(btn);
+  buttons.forEach(({ l, code }, i) => {
+    const size = buttons.length === 1 ? 78 : buttons.length <= 2 ? 68 : 58;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = l;
+    Object.assign(b.style, {
+      width: size + 'px', height: size + 'px', borderRadius: '50%',
+      background: 'rgba(212,160,80,0.22)', color: '#fff',
+      font: `bold ${Math.round(size * 0.22)}px system-ui, sans-serif`,
+      letterSpacing: '1px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      userSelect: 'none', touchAction: 'none',
+      border: '2px solid rgba(212,160,80,0.6)', padding: '0',
+      justifySelf: buttons.length >= 3 && i % 2 === 0 ? 'end' : 'start',
+    });
+    b.addEventListener('touchstart', (e) => { e.preventDefault(); synth(code, true); });
+    b.addEventListener('touchend',   (e) => { e.preventDefault(); synth(code, false); });
+    b.addEventListener('touchcancel', () => synth(code, false));
+    pad.appendChild(b);
+  });
+  document.body.appendChild(pad);
 
   ns.joystick = joy;
+  ns.actionPad = pad;
 }
 
 ns.nipplejs = nipplejs;

@@ -15,12 +15,16 @@ Per these licenses, all derivative works must credit the original artists.
 
 ## Layers used by The Sparrows
 
-| Character | Body | Hair                | Torso (color)         |
-|-----------|------|---------------------|-----------------------|
-| CIPHER    | female base | `long_messy/adult` | sleeveless / sky      |
-| VENOM     | female base | `bob/adult`        | sleeveless / green    |
-| HAWK      | female base | `longhawk/adult`   | sleeveless / orange   |
-| ORACLE    | female base | `long/adult`       | sleeveless / tan      |
+| Character | Body | Hair                | Torso (color)         | Eyes (color) |
+|-----------|------|---------------------|-----------------------|--------------|
+| CIPHER    | female base | `long_messy/adult` | sleeveless / sky      | neutral / blue  |
+| VENOM     | female base | `bob/adult`        | sleeveless / green    | neutral / green |
+| HAWK      | female base | `longhawk/adult`   | sleeveless / orange   | neutral / brown |
+| ORACLE    | female base | `long/adult`       | sleeveless / tan      | neutral / gray  |
+
+The LPC body layer ships without facial features — eyes are a separate
+layer under `eyes/human/adult/<expression>/`. Each character uses the
+`neutral` expression set.
 
 ## Artists
 

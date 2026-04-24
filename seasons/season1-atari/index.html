@@ -336,6 +336,7 @@
         // Character Definitions
         const CHARACTERS = [
             {
+                key: 'cipher',
                 name: 'NATASHA',
                 skill: 'HACKER',
                 color: COLORS.cyan,
@@ -344,6 +345,7 @@
                 description: 'DECRYPT SECURITY NODES'
             },
             {
+                key: 'venom',
                 name: 'MARIA',
                 skill: 'COMBAT',
                 color: COLORS.green,
@@ -352,6 +354,7 @@
                 description: 'NEUTRALIZE HOSTILES'
             },
             {
+                key: 'hawk',
                 name: 'ANYA',
                 skill: 'SNIPER',
                 color: COLORS.orange,
@@ -360,6 +363,7 @@
                 description: 'PRECISION TARGETING'
             },
             {
+                key: 'oracle',
                 name: 'OLGA',
                 skill: 'STRATEGY',
                 color: COLORS.purple,
@@ -605,6 +609,24 @@
         }
         
         function drawCharacterSprite(context, char, x, y, scale = 1) {
+            // Try the LPC composite sprite for the select-screen preview.
+            // The Atari gameplay canvas keeps its 8x12 blocks for era-authentic look.
+            // Select-screen preview canvases are tiny (32x32) so we use a
+            // small fixed LPC scale here instead of multiplying by the caller's.
+            const sparrowsCharacters = window.Sparrows && window.Sparrows.characters;
+            if (sparrowsCharacters && char.key) {
+                const drew = sparrowsCharacters.drawCharacter(context, {
+                    x: x + 4 * scale,
+                    y: y + 12 * scale,
+                    key: char.key,
+                    animation: 'walk',
+                    frame: 0,
+                    facingRight: true,
+                    scale: 0.42,
+                });
+                if (drew) return;
+            }
+
             const s = scale;
             // Body
             context.fillStyle = char.color;

@@ -55,21 +55,30 @@ add the entry to the `ANIMATIONS` map in `characterRenderer.js`.
 ## Re-extracting layers
 
 ```bash
-git clone --depth=1 \
+# Sparse clone is enough — we only need the spritesheets tree.
+git clone --depth=1 --filter=blob:none --sparse \
   https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator.git \
   vendor/lpc-generator
+(cd vendor/lpc-generator && git sparse-checkout set spritesheets)
 
 SRC=vendor/lpc-generator/spritesheets
 DST=shared/assets/characters
 for anim in walk slash hurt; do
   cp "$SRC/body/bodies/female/$anim.png" "$DST/body/$anim.png"
-  for ch in cipher:long_messy:sky venom:bob:green hawk:longhawk:orange oracle:long:tan; do
-    IFS=: read key hair color <<< "$ch"
+  # key:hair:torso-color:eye-color
+  for ch in cipher:long_messy:sky:blue venom:bob:green:green hawk:longhawk:orange:brown oracle:long:tan:gray; do
+    IFS=: read key hair torso_color eye_color <<< "$ch"
     cp "$SRC/hair/$hair/adult/$anim.png" "$DST/$key/hair_$anim.png"
-    cp "$SRC/torso/clothes/sleeveless/sleeveless/female/$anim/$color.png" "$DST/$key/torso_$anim.png"
+    cp "$SRC/torso/clothes/sleeveless/sleeveless/female/$anim/$torso_color.png" "$DST/$key/torso_$anim.png"
+    cp "$SRC/eyes/human/adult/neutral/$anim/$eye_color.png" "$DST/$key/eyes_$anim.png"
   done
 done
 ```
+
+**Important**: the LPC body PNG has no eyes or mouth drawn on — the
+head is a blank skin-toned oval. The `eyes/` layer must be composited
+onto the face between body and hair, otherwise the characters appear
+featureless (which is the bug that shipped in the first commit).
 
 ## Attribution requirement
 

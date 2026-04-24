@@ -80,10 +80,10 @@ const STATE = { TITLE: 0, SELECT: 1, CUT: 2, PLAY: 3, PAUSE: 4, INV: 5, OVER: 6,
 let state = STATE.TITLE, timer = 0, gt = 0;
 
 const CHARS = [
-    { id: 'nat', name: 'NATASHA', code: 'CIPHER', col: COL.nat, ab: 'SYSTEM HACK', desc: 'Disable electronics & reveal enemies', hp: 85, dmg: 10 },
-    { id: 'mar', name: 'MARIA', code: 'VENOM', col: COL.mar, ab: 'BERSERKER', desc: 'Invulnerable + damage boost', hp: 120, dmg: 15 },
-    { id: 'any', name: 'ANYA', code: 'HAWK', col: COL.any, ab: 'MARKED DEATH', desc: 'Tag enemies for bonus damage', hp: 75, dmg: 30 },
-    { id: 'olg', name: 'OLGA', code: 'ORACLE', col: COL.olg, ab: 'FORESIGHT', desc: 'Reveal all enemy positions', hp: 80, dmg: 12 }
+    { key: 'cipher', id: 'nat', name: 'NATASHA', code: 'CIPHER', col: COL.nat, ab: 'SYSTEM HACK', desc: 'Disable electronics & reveal enemies', hp: 85, dmg: 10 },
+    { key: 'venom', id: 'mar', name: 'MARIA', code: 'VENOM', col: COL.mar, ab: 'BERSERKER', desc: 'Invulnerable + damage boost', hp: 120, dmg: 15 },
+    { key: 'hawk', id: 'any', name: 'ANYA', code: 'HAWK', col: COL.any, ab: 'MARKED DEATH', desc: 'Tag enemies for bonus damage', hp: 75, dmg: 30 },
+    { key: 'oracle', id: 'olg', name: 'OLGA', code: 'ORACLE', col: COL.olg, ab: 'FORESIGHT', desc: 'Reveal all enemy positions', hp: 80, dmg: 12 }
 ];
 
 let P = { x: 100, y: 280, vx: 0, vy: 0, w: 20, h: 36, ci: 0, hp: 100, mhp: 100, stam: 100, mstam: 100,
@@ -564,7 +564,9 @@ function rSelect() {
         ctx.fillStyle = sel ? '#101018' : COL.black; ctx.fillRect(x, y, 125, 165);
         if (sel) { ctx.strokeStyle = c.col; ctx.lineWidth = 2; ctx.strokeRect(x, y, 125, 165); }
         ctx.fillStyle = c.col; ctx.globalAlpha = 0.25; ctx.fillRect(x + 8, y + 8, 109, 60); ctx.globalAlpha = 1;
-        ctx.fillStyle = c.col; ctx.fillRect(x + 43, y + 20, 38, 45); ctx.fillRect(x + 50, y + 10, 24, 13);
+        const sparrowsChars = window.Sparrows && window.Sparrows.characters;
+        const drewS = sparrowsChars && c.key && sparrowsChars.drawCharacter(ctx, { x: x + 62, y: y + 68, key: c.key, animation: 'walk', frame: 0, facingRight: true, scale: 1.05 });
+        if (!drewS) { ctx.fillStyle = c.col; ctx.fillRect(x + 43, y + 20, 38, 45); ctx.fillRect(x + 50, y + 10, 24, 13); }
         ctx.fillStyle = COL.white; ctx.font = 'bold 10px "Inter", sans-serif'; ctx.fillText(c.code, x + 8, y + 88);
         ctx.fillStyle = c.col; ctx.font = '8px "Inter", sans-serif'; ctx.fillText(c.name, x + 8, y + 102);
         if (sel) { ctx.fillStyle = COL.light; ctx.font = '7px "Inter", sans-serif'; ctx.fillText('ABILITY: ' + c.ab, x + 8, y + 120); ctx.fillStyle = COL.mid; ctx.fillText(c.desc, x + 8, y + 135); ctx.fillStyle = COL.gray; ctx.fillText('HP: ' + c.hp + '  DMG: ' + c.dmg, x + 8, y + 155); }
@@ -607,20 +609,25 @@ function rGame() {
         if (e.boss) { ctx.fillStyle = COL.gray; ctx.fillRect(e.x - 40, e.y - e.h - 28, 80, 6); ctx.fillStyle = COL.vip; ctx.fillRect(e.x - 40, e.y - e.h - 28, 80 * (e.hp / e.mhp), 6); ctx.fillStyle = COL.white; ctx.font = '7px "Inter", sans-serif'; ctx.fillText('VIPER', e.x - 11, e.y - e.h - 33); }
     });
     
+    const sparrowsChars = window.Sparrows && window.Sparrows.characters;
     if (comp.alive) {
         const c = comp;
         ctx.fillStyle = '#000'; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(c.x, miss.h - 25, 8, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-        ctx.fillStyle = c.char.col; ctx.fillRect(c.x - 9, c.y - 30, 18, 32); ctx.fillRect(c.x - 6, c.y - 40, 12, 12);
+        const drewC = sparrowsChars && c.char.key && sparrowsChars.drawCharacter(ctx, { x: c.x, y: c.y + 2, key: c.char.key, animation: 'walk', frame: Math.floor(gt / 6) + (c.x | 0), facingRight: P.x >= c.x, scale: 0.78 });
+        if (!drewC) { ctx.fillStyle = c.char.col; ctx.fillRect(c.x - 9, c.y - 30, 18, 32); ctx.fillRect(c.x - 6, c.y - 40, 12, 12); }
         ctx.fillStyle = COL.gray; ctx.fillRect(c.x - 15, c.y - 48, 30, 4); ctx.fillStyle = c.hp > 30 ? COL.hp : COL.hpLow; ctx.fillRect(c.x - 15, c.y - 48, 30 * (c.hp / c.mhp), 4);
     }
-    
+
     const ch = CHARS[P.ci];
     const vis = !P.inv || Math.floor(gt / 3) % 2 === 0;
     if (vis) {
         ctx.fillStyle = '#000'; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(P.x, miss.h - 25, 10, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
         const ph = P.crouch ? 24 : P.h, py = P.crouch ? P.y - 12 : P.y - P.h;
-        ctx.fillStyle = P.cover ? COL.gray : ch.col; ctx.fillRect(P.x - 10, py, 20, ph);
-        ctx.fillStyle = ch.col; ctx.fillRect(P.x - 7, py - 12, 14, 14);
+        const drewP = !P.cover && sparrowsChars && ch.key && sparrowsChars.drawCharacter(ctx, { x: P.x, y: P.y, key: ch.key, animation: 'walk', frame: Math.floor(gt / 5), facingRight: P.faceR !== false, scale: P.crouch ? 0.65 : 0.85 });
+        if (!drewP) {
+            ctx.fillStyle = P.cover ? COL.gray : ch.col; ctx.fillRect(P.x - 10, py, 20, ph);
+            ctx.fillStyle = ch.col; ctx.fillRect(P.x - 7, py - 12, 14, 14);
+        }
         if (P.aim) { const wmx = mx + camX, wmy = my + camY; const a = Math.atan2(wmy - P.y, wmx - P.x); ctx.strokeStyle = ch.col; ctx.globalAlpha = 0.4; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(P.x, P.y - 12); ctx.lineTo(P.x + Math.cos(a) * 100, P.y - 12 + Math.sin(a) * 100); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
         if (P.abOn) { ctx.strokeStyle = ch.col; ctx.globalAlpha = 0.5 + Math.sin(gt * 0.15) * 0.3; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(P.x, P.y - 18, 22 + Math.sin(gt * 0.1) * 4, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     }

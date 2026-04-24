@@ -53,6 +53,7 @@ export function preloadCharacters(rootOverride) {
     for (const key of CHARACTER_KEYS) {
       sources.push(`${root}/${key}/hair_${anim}.png`);
       sources.push(`${root}/${key}/torso_${anim}.png`);
+      sources.push(`${root}/${key}/eyes_${anim}.png`);
     }
   }
   for (const src of sources) loadImage(src);
@@ -98,6 +99,7 @@ export function drawCharacter(ctx, opts) {
   const frameIndex = ((frame % animDef.frames) + animDef.frames) % animDef.frames;
 
   const body  = getImg(`${root}/body/${animation}.png`);
+  const eyes  = getImg(`${root}/${key}/eyes_${animation}.png`);
   const hair  = getImg(`${root}/${key}/hair_${animation}.png`);
   const torso = getImg(`${root}/${key}/torso_${animation}.png`);
 
@@ -109,18 +111,21 @@ export function drawCharacter(ctx, opts) {
   const sx = frameIndex * TILE;
   const sy = animDef.row * TILE;
 
+  // Layer order: body -> eyes (on the bare face) -> torso (clothes) -> hair (last, can cover forehead).
+  const layers = [body, eyes, torso, hair];
+
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   if (!facingRight) {
     ctx.translate(dx + drawSize, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(body, sx, sy, TILE, TILE, 0, dy, drawSize, drawSize);
-    if (torso) ctx.drawImage(torso, sx, sy, TILE, TILE, 0, dy, drawSize, drawSize);
-    if (hair)  ctx.drawImage(hair,  sx, sy, TILE, TILE, 0, dy, drawSize, drawSize);
+    for (const img of layers) {
+      if (img) ctx.drawImage(img, sx, sy, TILE, TILE, 0, dy, drawSize, drawSize);
+    }
   } else {
-    ctx.drawImage(body, sx, sy, TILE, TILE, dx, dy, drawSize, drawSize);
-    if (torso) ctx.drawImage(torso, sx, sy, TILE, TILE, dx, dy, drawSize, drawSize);
-    if (hair)  ctx.drawImage(hair,  sx, sy, TILE, TILE, dx, dy, drawSize, drawSize);
+    for (const img of layers) {
+      if (img) ctx.drawImage(img, sx, sy, TILE, TILE, dx, dy, drawSize, drawSize);
+    }
   }
   ctx.restore();
   return true;
@@ -133,23 +138,28 @@ export function renderPortrait(key, options = {}) {
   const { size = 96, rootOverride } = options;
   const root = rootOverride || ROOT;
   const body  = getImg(`${root}/body/walk.png`);
+  const eyes  = getImg(`${root}/${key}/eyes_walk.png`);
   const hair  = getImg(`${root}/${key}/hair_walk.png`);
   const torso = getImg(`${root}/${key}/torso_walk.png`);
   if (!body) return null;
 
+  // LPC row 2 (facing down), frame 0. Within the 64x64 tile the whole
+  // character occupies roughly x=18..46 (~28 wide) and y=29..62 (~33 tall).
+  // Crop a 32x36 window centered on the character and letterbox it into a
+  // square canvas so the portrait aspect matches the card's box.
+  const sw = 32, sh = 36;
+  const sx = (TILE - sw) / 2; // 16
+  const sy = 2 * TILE + 26;
+  const destW = size;
+  const destH = Math.round(size * (sh / sw)); // size * 1.125
   const off = document.createElement('canvas');
-  off.width = size;
-  off.height = size;
+  off.width = destW;
+  off.height = destH;
   const c = off.getContext('2d');
   c.imageSmoothingEnabled = false;
-  // Crop the upper ~36px of the 64px frame (head + shoulders) at frame 0, row 2 (facing down).
-  const sx = 0;
-  const sy = 2 * TILE + 6; // top of head sits ~6px down
-  const sw = TILE;
-  const sh = 36;
-  c.drawImage(body, sx, sy, sw, sh, 0, 0, size, size * (sh / sw));
-  if (torso) c.drawImage(torso, sx, sy, sw, sh, 0, 0, size, size * (sh / sw));
-  if (hair)  c.drawImage(hair,  sx, sy, sw, sh, 0, 0, size, size * (sh / sw));
+  for (const img of [body, eyes, torso, hair]) {
+    if (img) c.drawImage(img, sx, sy, sw, sh, 0, 0, destW, destH);
+  }
   return off.toDataURL('image/png');
 }
 

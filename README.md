@@ -144,29 +144,24 @@ The game's visual and mechanical complexity evolves with each season:
 sparrows/
 ├── README.md
 ├── LICENSE
+├── package.json              # Phaser 4 + Vite (future seasons only)
+├── vite.config.js            # Multi-entry Vite config with @shared alias
+├── TOOLCHAIN.md              # Aseprite + Tiled + Phaser 4 pipeline guide
+├── shared/
+│   └── phaser/
+│       ├── EraConfigs.js     # Hardware configs for all 8 eras
+│       ├── BaseScene.js      # Base class with auto filter application
+│       └── RetroFilters.js   # Phaser 4 camera filter helpers
 ├── seasons/
 │   ├── season1-atari/
-│   │   └── index.html          # Episode 1: The Awakening
-│   ├── season2-nes/
-│   │   └── index.html          # Episodes 2-4: Training Day
-│   ├── season3-snes/
-│   │   └── index.html          # Episodes 3-4: The Mission Begins
-│   ├── season4-ps1/
-│   │   └── index.html          # Episodes 4-6: Bonds Tested
-│   ├── season5-ps2/
-│   │   └── index.html          # Episodes 7-9: Revelations
-│   ├── season6-ps3/
-│   │   └── index.html          # Episodes 10-12: Shadows Rising
-│   ├── season7-ps4/
-│   │   └── index.html          # Episodes 13-15: Showdown
-│   └── season8-current/
-│       └── index.html          # Episodes 16-18: Resolution (FINALE)
+│   │   └── index.html        # Vanilla JS — no build step required
+│   ├── season2-nes/ … season8-current/  # Same — all standalone
+│   └── season-phaser-template/   # Phaser 4 starter for new seasons
 ├── docs/
-│   ├── ORIGINS_BIBLE.md        # Character lore and world-building
-│   ├── GAME_DESIGN.md          # Technical design document
-│   └── CHANGELOG.md            # Version history
+│   ├── ORIGINS_BIBLE.md
+│   ├── GAME_DESIGN.md
+│   └── CHANGELOG.md
 └── assets/
-    └── (future sprite sheets, audio files)
 ```
 
 ---
@@ -225,12 +220,12 @@ sparrows/
 
 ## 🚀 Development
 
-### Running Locally
+### Running Locally (Seasons 1–8 — no build step)
 ```bash
 # Clone the repository
 git clone https://github.com/khaaliswooden-max/sparrows.git
 
-# Open any season in your browser
+# Open any season directly in your browser
 open seasons/season1-atari/index.html
 ```
 
@@ -239,6 +234,45 @@ open seasons/season1-atari/index.html
 - ✅ Firefox 75+
 - ✅ Safari 13+
 - ✅ Edge 80+
+
+---
+
+## ⚙️ Phaser 4 Toolchain (Future Seasons)
+
+Seasons 1–8 are complete and self-contained. The Phaser 4 toolchain is set up for **future season development**.
+
+### Quick Start
+```bash
+npm install
+npm run dev:template   # opens the NES-era template at localhost:3000
+```
+
+### Stack
+
+| Tool | Role |
+|------|------|
+| **Phaser 4** | Primary engine — WebGL renderer, pixel-art mode, built-in retro filters |
+| **Vite 5** | Dev server + bundler |
+| **Aseprite** | Pixel art + animation → PNG spritesheets |
+| **Tiled** | Tile-based level editor → JSON tilemaps (Phaser reads natively) |
+| **GB Studio** | Optional: Game Boy ROM + WASM build (see the `1977` repo) |
+
+### Era configs
+`shared/phaser/EraConfigs.js` defines the Phaser 4 game config (resolution, zoom, filters, physics) for every era. Future seasons just import the matching era key:
+
+```js
+import { EraConfigs } from '@shared/phaser/EraConfigs.js';
+const ERA = EraConfigs['nes']; // or atari2600, snes, ps1, ps2, ps3, ps4, currentGen
+```
+
+### Starting a new season
+```bash
+cp -r seasons/season-phaser-template seasons/season9-xxx
+# Edit src/config.js — set ERA_KEY to your era
+# Register entry in vite.config.js and package.json
+```
+
+See [TOOLCHAIN.md](TOOLCHAIN.md) for the full Aseprite + Tiled + filter pipeline.
 
 ---
 
@@ -256,13 +290,12 @@ The full character backgrounds, ancestral lineages, and thematic framework are d
 ## 🎯 Roadmap
 
 ### Near Term
-- [ ] Season 3: SNES/Genesis era (Streets of Rage style beat-em-up)
-- [ ] Audio improvements (full chiptune soundtrack)
+- [ ] Audio improvements (full chiptune soundtrack for Seasons 1–8)
 - [ ] Save system via localStorage
 - [ ] Mobile touch controls optimization
 
 ### Long Term
-- [ ] Seasons 4-8 development
+- [ ] Future seasons using Phaser 4 toolchain
 - [ ] Multiplayer co-op mode
 - [ ] Level editor
 - [ ] Speedrun timer/leaderboards
@@ -273,7 +306,8 @@ The full character backgrounds, ancestral lineages, and thematic framework are d
 
 **Concept & Narrative:** Khaalis Wooden  
 **Development:** Zuup Innovation Lab / Visionblox LLC  
-**Engine:** Pure HTML5 Canvas + JavaScript (no frameworks)
+**Engine (Seasons 1–8):** Pure HTML5 Canvas + JavaScript  
+**Engine (Future Seasons):** Phaser 4
 
 ---
 
@@ -286,9 +320,10 @@ MIT License — see [LICENSE](LICENSE) for details.
 ## 🔗 Links
 
 - **Play Now:** [GitHub Pages](https://khaaliswooden-max.github.io/sparrows/)
+- **1977 Repo:** [Season 1 Phaser 4 standalone](https://github.com/khaaliswooden-max/1977)
 - **Visionblox:** [visionblox.com](https://visionblox.com)
 - **Zuup Innovation Lab:** Coming Soon
 
 ---
 
-*"Aim with memory; fire with mercy."* — Anya Delgado*"Aim with memory; fire with mercy."* — Anya Delgado
+*"Aim with memory; fire with mercy."* — Anya Delgado

@@ -198,9 +198,10 @@ if (!reduced) {
       if (ageH > 30 * 24) return; // hide after 30 days
       const num = s.season.match(/season(\d)/)?.[1];
       if (!num) return;
+      const label = s.season === 'season9-splat' ? 'EPILOGUE' : `SEASON ${num}`;
       const link = banner.querySelector('a');
       link.href = s.url;
-      banner.querySelector('.cont-label').textContent = `SEASON ${num}${s.mobile ? ' • MOBILE' : ''}`;
+      banner.querySelector('.cont-label').textContent = `${label}${s.mobile ? ' • MOBILE' : ''}`;
       banner.hidden = false;
       if (!reduced) gsap.from(banner, { y: -20, opacity: 0, duration: 0.6, delay: 0.2, ease: 'power2.out' });
     });

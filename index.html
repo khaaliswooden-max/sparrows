@@ -306,6 +306,10 @@
         .season-6 .season-badge { background: #4878c8; color: #fff; }
         .season-7 .season-badge { background: #3060a0; color: #fff; }
         .season-8 .season-badge { background: linear-gradient(90deg, #d4a050, #f0c878); color: #000; }
+        .season-9 .season-badge {
+            background: linear-gradient(90deg, #50b8d8, #7848c8 35%, #d4a050 70%, #f0c878);
+            color: #000;
+        }
         
         .season-title {
             font-family: 'Bebas Neue', sans-serif;
@@ -399,20 +403,47 @@
             background: linear-gradient(145deg, #1a1510 0%, #0a0805 100%);
             border-color: #3a3020;
         }
-        
+
         .season-8:hover {
             border-color: #d4a050;
             box-shadow: 0 20px 50px rgba(212, 160, 80, 0.2);
         }
-        
+
         .season-8 .season-body {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
-        
+
         @media (max-width: 600px) {
             .season-8 .season-body {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Epilogue card — the 3D Gaussian Splat era */
+        .season-9 {
+            grid-column: 1 / -1;
+            background:
+                radial-gradient(ellipse at 15% 0%, rgba(80, 184, 216, 0.08), transparent 45%),
+                radial-gradient(ellipse at 85% 100%, rgba(212, 160, 80, 0.1), transparent 45%),
+                linear-gradient(145deg, #10131c 0%, #080a10 100%);
+            border-color: #2a3040;
+        }
+
+        .season-9:hover {
+            border-color: #50b8d8;
+            box-shadow: 0 20px 50px rgba(80, 152, 216, 0.18);
+        }
+
+        .season-9 .season-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .season-9 .season-body {
                 grid-template-columns: 1fr;
             }
         }
@@ -551,7 +582,7 @@
         </svg>
         <h1>THE SPARROWS</h1>
         <p class="subtitle">GENERATIONAL WARFARE</p>
-        <p class="tagline">A browser-based action game series spanning 8 gaming eras</p>
+        <p class="tagline">A browser-based action game series spanning 8 gaming eras — plus a gaussian-splat epilogue</p>
         
         <div class="characters">
             <div class="character cipher">
@@ -744,8 +775,31 @@
                 </div>
             </div>
         </div>
+        <!-- Epilogue — 3D Gaussian Splatting -->
+        <div class="season-card season-9">
+            <div class="season-header">
+                <span class="season-badge">EPILOGUE • NEURAL RENDERING</span>
+                <h2 class="season-title">AFTERGLOW</h2>
+                <span class="season-era">2023+ • Real-time 3D Gaussian Splatting</span>
+            </div>
+            <div class="season-body">
+                <div class="finale-info">
+                    <p class="season-desc">Five years after Resolution. The medium takes its next leap: a memorial garden built from ~22,000 three-dimensional gaussian splats, projected and blended in real time. Walk in full 3D. Recover eight memories — one for every era. Say goodbye.</p>
+                    <div class="season-features">
+                        <span class="feature">True 3D World</span>
+                        <span class="feature">Gaussian Splat Renderer</span>
+                        <span class="feature">First-Person Exploration</span>
+                        <span class="feature">Series Epilogue</span>
+                    </div>
+                </div>
+                <div class="finale-actions">
+                    <a href="seasons/season9-splat/index.html" class="play-btn desktop"><span class="icon">🖥️</span> ENTER THE GARDEN (DESKTOP)</a>
+                    <a href="seasons/season9-splat/mobile.html" class="play-btn mobile"><span class="icon">📱</span> ENTER THE GARDEN (MOBILE)</a>
+                </div>
+            </div>
+        </div>
     </main>
-    
+
     <section class="how-to-play">
         <h2>🎮 HOW TO PLAY</h2>
         <p>Click any season to play in your browser. No downloads required.<br>
@@ -762,7 +816,7 @@
             <a href="https://github.com/khaaliswooden-max/sparrows">View Source</a>
         </div>
         <p class="credits"><strong>Zuup Innovation Lab</strong> / <strong>Visionblox LLC</strong> • 2025</p>
-        <p class="tech-note">HTML5 CANVAS • WEB AUDIO • PHASER 4 • GSAP • JSFXR</p>
+        <p class="tech-note">HTML5 CANVAS • WEBGL2 GAUSSIAN SPLATTING • WEB AUDIO • PHASER 4 • GSAP • JSFXR</p>
     </footer>
 
     <script type="importmap">

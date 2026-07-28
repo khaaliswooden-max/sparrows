@@ -41,10 +41,11 @@ The game's visual and mechanical complexity evolves with each season:
 | 6 | PS3/360 (2005-2013) | Uncharted, Gears of War | Shadows Rising | ✅ Complete |
 | 7 | PS4/XB1 (2013-2020) | The Last of Us, Metal Gear V | Showdown | ✅ Complete |
 | 8 | Current Gen (2020+) | Modern AAA | Resolution | ✅ Complete |
+| ★ | Neural Rendering (2023+) | 3D Gaussian Splatting | Epilogue: Afterglow | ✅ Complete |
 
 **🎉 THE SPARROWS - COMPLETE SERIES 🎉**
 
-*From Atari to Current Gen. Eight seasons. Twenty years of story. Four sisters. One unbreakable bond.*
+*From Atari to Current Gen — and one step beyond, into real-time neural rendering. Eight seasons. Twenty years of story. Four sisters. One unbreakable bond.*
 
 ---
 
@@ -136,6 +137,14 @@ The game's visual and mechanical complexity evolves with each season:
 - **ESC** — Pause
 - All four Sparrows playable with hot-swap, ultimate abilities, mission hub, and cinematic finale
 
+### Epilogue: Afterglow (3D Gaussian Splatting - BONUS)
+- **WASD** — Move
+- **Mouse** — Look (click the garden to capture the cursor)
+- **Shift** — Sprint
+- **E** — Recover Memory / advance dialogue
+- **ESC** — Release cursor
+- First-person walk through a memorial garden rendered entirely with real-time 3D Gaussian Splatting. Recover eight memories — one per season — to unlock the finale.
+
 ---
 
 ## 📁 Project Structure
@@ -159,8 +168,12 @@ sparrows/
 │   │   └── index.html          # Episodes 10-12: Shadows Rising
 │   ├── season7-ps4/
 │   │   └── index.html          # Episodes 13-15: Showdown
-│   └── season8-current/
-│       └── index.html          # Episodes 16-18: Resolution (FINALE)
+│   ├── season8-current/
+│   │   └── index.html          # Episodes 16-18: Resolution (FINALE)
+│   └── season9-splat/
+│       ├── index.html          # Epilogue: Afterglow (3D Gaussian Splatting)
+│       ├── mobile.html         # Touch-controls shell
+│       └── splat.js            # WebGL2 gaussian splat engine + game
 ├── docs/
 │   ├── ORIGINS_BIBLE.md        # Character lore and world-building
 │   ├── GAME_DESIGN.md          # Technical design document
@@ -214,6 +227,15 @@ sparrows/
 - **Colors:** Modern realistic palette with atmospheric lighting
 - **Audio:** Advanced synthesis with environmental awareness
 - **Features:** Companion AI system, crafting/inventory, stealth visibility mechanics, enemy AI state machine (patrol/alert/combat/search), boss battles, stamina system, multiple objectives per level
+
+### Epilogue (Neural Rendering — 3D Gaussian Splatting)
+- **Resolution:** 1280×720 (desktop), native-resolution fullscreen (mobile)
+- **Renderer:** Custom WebGL2 3D Gaussian Splatting engine, zero dependencies
+  - ~22,000 anisotropic 3D gaussians (position + full 3×3 covariance baked on CPU)
+  - Per-frame EWA covariance projection in the vertex shader (Σ′ = J·W·Σ·Wᵀ·Jᵀ), eigen-decomposed into screen-space splat axes
+  - Painter's-order alpha blending via O(n) counting sort on view depth, re-sorted every frame (which makes animated splats — bobbing shards, drifting motes, the finale murmuration of 1,800 birds — free)
+- **Audio:** Ambient drone + synthesis matching the series voice
+- **Features:** First-person exploration, deterministic procedural scene (seeded RNG), memory-shard collection, dialogue system, murmuration finale
 
 ### Season 8 (Current Gen - FINAL)
 - **Resolution:** 640×360 native, scaled 2x to 1280×720 (Full HD)

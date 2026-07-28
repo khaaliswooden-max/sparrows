@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Epilogue: Afterglow (Neural Rendering Era — 3D Gaussian Splatting)
+
+#### Rendering
+- Custom real-time 3D Gaussian Splatting engine in raw WebGL2 (`seasons/season9-splat/splat.js`), zero dependencies
+- ~22,000 anisotropic 3D gaussians with full 3×3 covariance baked per splat (Σ = R·S·S·Rᵀ)
+- EWA covariance projection in the vertex shader (Σ′ = J·W·Σ·Wᵀ·Jᵀ) with screen-space eigen-decomposition into splat axes
+- Back-to-front painter's alpha blending using an O(n) counting sort on view depth, re-sorted every frame so animated splats come for free
+
+#### Gameplay
+- First-person exploration of a memorial garden: the four Sparrow statues, an obelisk beacon, sentinel trees, drifting motes
+- Eight collectible memory shards, one per season/era, each with dialogue in the series voice
+- Finale murmuration of 1,800 animated golden sparrows once all memories are recovered
+- Desktop (pointer lock) and mobile (dual virtual-stick touch) shells
+- Deterministic procedural scene via seeded RNG — the reconstruction is identical on every visit
+
+#### Site
+- Epilogue card on the landing page, README roadmap/controls/tech sections, continue-banner support
+
 ### Planned
 - Season 3: SNES/Genesis era (Streets of Rage style)
 - Audio improvements and full chiptune soundtrack

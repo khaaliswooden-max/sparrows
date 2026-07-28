@@ -358,6 +358,7 @@ if (isTouch && !isMobileHtml) {
     'season6-ps3':     [{ l: 'COV',  code: 'Space' }, { l: 'RLD', code: 'KeyR' }, { l: 'ABL', code: 'KeyQ' }],
     'season7-ps4':     [{ l: 'COV',  code: 'Space' }, { l: 'RLD', code: 'KeyR' }, { l: 'ABL', code: 'KeyQ' }, { l: 'MED', code: 'KeyH' }],
     'season8-current': [{ l: 'DG',   code: 'Space' }, { l: 'RLD', code: 'KeyR' }, { l: 'ABL', code: 'KeyQ' }, { l: 'ULT', code: 'KeyE' }],
+    'season9-splat':   [{ l: 'ACT',  code: 'KeyE' }],
   };
   const keyForCode = (code) => {
     if (code === 'Space') return ' ';

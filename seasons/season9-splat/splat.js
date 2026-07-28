@@ -767,11 +767,14 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 
+// The garden stays walkable after the finale ('end' hides the card but the
+// world keeps running), so pointer lock must engage in both states.
+const walkable = () => state === 'play' || state === 'end';
 function lockPointer() {
-  if (MODE === 'desktop' && state === 'play') canvas.requestPointerLock?.();
+  if (MODE === 'desktop' && walkable()) canvas.requestPointerLock?.();
 }
 canvas.addEventListener('click', () => {
-  if (state !== 'play') return;
+  if (!walkable()) return;
   if (dlgLine && document.pointerLockElement) { advanceDialogue(); return; }
   lockPointer();
 });
